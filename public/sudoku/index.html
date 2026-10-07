@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sudoku · Fenrir Forge</title>
+<meta name="description" content="Free Sudoku with a daily puzzle, four difficulty levels, notes and hints. Works on phone, tablet and computer.">
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 16px 16px 32px; max-width: 560px; -webkit-tap-highlight-color: transparent; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .back { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+  .back:hover { text-decoration: underline; }
+  h1 { font-family: "Cinzel", Georgia, serif; font-size: 1.6rem; margin: 8px 0 12px; letter-spacing: 0.03em; }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  select, .btn {
+    font: inherit; font-size: 0.9rem; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; cursor: pointer;
+  }
+  .btn:hover, select:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .stats { display: flex; gap: 14px; margin-left: auto; color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+  .daily-info { color: var(--muted); font-size: 0.85rem; margin: -2px 0 10px; min-height: 1.2em; }
+
+  .board-wrap { container-type: inline-size; width: min(100%, calc(100svh - 300px)); min-width: 280px; margin: 0 auto; }
+  .board {
+    display: grid; grid-template-columns: repeat(9, 1fr);
+    aspect-ratio: 1; border: 2px solid var(--text); border-radius: 6px; overflow: hidden;
+    background: var(--surface); user-select: none; touch-action: manipulation;
+  }
+  .cell {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    font-size: 6.2cqw; font-variant-numeric: tabular-nums; cursor: pointer;
+    color: var(--accent);
+  }
+  .cell.br { border-right: 2px solid var(--text); }
+  .cell.bb { border-bottom: 2px solid var(--text); }
+  .cell.c8 { border-right: none; }
+  .cell.r8 { border-bottom: none; }
+  .cell.given { color: var(--text); font-weight: 600; }
+  .cell.peer { background: color-mix(in srgb, var(--muted) 12%, var(--surface)); }
+  .cell.same { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
+  .cell.selected { background: color-mix(in srgb, var(--accent) 38%, var(--surface)); }
+  .cell.error { color: #dc2626; }
+  @media (prefers-color-scheme: dark) { .cell.error { color: #f87171; } }
+  .cell.flash { animation: flash 0.6s ease; }
+  @keyframes flash { 50% { background: color-mix(in srgb, var(--accent) 45%, var(--surface)); } }
+  .notes {
+    position: absolute; inset: 2px; display: grid; grid-template-columns: repeat(3, 1fr);
+    font-size: 2.3cqw; color: var(--muted); font-weight: 500; line-height: 1;
+  }
+  .notes span { display: flex; align-items: center; justify-content: center; }
+
+  .pad { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; margin: 14px auto 10px; width: min(100%, calc(100svh - 300px)); min-width: 280px; }
+  .pad button {
+    font: inherit; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 0 4px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; touch-action: manipulation;
+  }
+  .pad button:hover { border-color: var(--accent); }
+  .pad b { font-size: 1.45rem; font-weight: 600; line-height: 1.1; }
+  .pad small { font-size: 0.65rem; color: var(--muted); }
+  .pad button:disabled { opacity: 0.3; cursor: default; }
+  .notes-on .pad b { color: var(--accent); font-size: 1.1rem; }
+
+  .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: min(100%, calc(100svh - 300px)); min-width: 280px; margin: 0 auto; }
+  .actions .btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 0.8rem; }
+  .actions svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  .help { margin-top: 22px; font-size: 0.85rem; color: var(--muted); }
+  .help summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+  .help p, .help ul { margin: 8px 0; }
+  .settings { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+
+  dialog {
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text);
+    padding: 24px; width: min(92vw, 360px); text-align: center;
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.5); }
+  dialog img { width: 64px; height: 64px; }
+  dialog h2 { font-family: "Cinzel", Georgia, serif; margin: 8px 0 4px; }
+  dialog p { color: var(--muted); margin: 4px 0; }
+  .result { font-size: 1.1rem; color: var(--text); font-variant-numeric: tabular-nums; margin: 12px 0 !important; }
+  dialog .row { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+
+  .busy { opacity: 0.5; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <a class="back" href="../">&larr; Fenrir Forge</a>
+  </div>
+  <h1>Sudoku</h1>
+
+  <div class="bar">
+    <select id="mode" aria-label="Puzzle type">
+      <option value="daily">Daily puzzle</option>
+      <option value="easy">Easy</option>
+      <option value="medium">Medium</option>
+      <option value="hard">Hard</option>
+      <option value="expert">Expert</option>
+    </select>
+    <button class="btn" id="newGame">New game</button>
+    <div class="stats">
+      <span title="Mistakes" id="mistakes">✕ 0</span>
+      <span title="Time" id="timer">0:00</span>
+    </div>
+  </div>
+  <div class="daily-info" id="dailyInfo"></div>
+
+  <div class="board-wrap"><div class="board" id="board" role="grid" aria-label="Sudoku board"></div></div>
+
+  <div class="pad" id="pad"></div>
+
+  <div class="actions">
+    <button class="btn" id="undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>Undo</button>
+    <button class="btn" id="erase"><svg viewBox="0 0 24 24"><path d="M20 20H8l-4-4a2 2 0 0 1 0-3l9-9a2 2 0 0 1 3 0l4 4a2 2 0 0 1 0 3l-9 9"/><path d="m9 8 7 7"/></svg>Erase</button>
+    <button class="btn" id="notesBtn" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Notes</button>
+    <button class="btn" id="hint"><svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V16h8v-1.3A7 7 0 0 0 12 2Z"/></svg>Hint</button>
+  </div>
+
+  <details class="help">
+    <summary>How to play</summary>
+    <p>Fill every row, column and 3×3 box with the numbers 1 to 9, with no repeats.</p>
+    <ul>
+      <li><b>Tap a square</b>, then tap a number to fill it in. Tap the same number again to remove it.</li>
+      <li><b>Notes</b> lets you pencil in small possible numbers. They clear themselves when you fill in a matching number nearby.</li>
+      <li><b>Hint</b> fills in the selected square (or a random one) for you.</li>
+      <li>The <b>daily puzzle</b> is the same for everyone. It's easiest on Monday and hardest on Sunday.</li>
+      <li>On a keyboard: arrow keys to move, 1–9 to fill, Backspace to erase, N for notes, Ctrl+Z to undo.</li>
+    </ul>
+    <p>Your game saves automatically on this device.</p>
+    <label class="settings"><input type="checkbox" id="showMistakes" checked> Highlight mistakes in red</label>
+  </details>
+
+  <dialog id="winDialog">
+    <img src="../logo.svg" alt="">
+    <h2>Puzzle solved</h2>
+    <p id="winSub"></p>
+    <p class="result" id="winResult"></p>
+    <p id="winStreak"></p>
+    <div class="row">
+      <button class="btn" id="share">Copy result</button>
+      <button class="btn primary" id="winNew">New game</button>
+    </div>
+  </dialog>
+
+<script>
+// ---------- Puzzle engine ----------
+const ALL = 0x3FE; // bits 1..9
+const ROW = i => (i / 9) | 0, COL = i => i % 9, BOX = i => ((ROW(i) / 3) | 0) * 3 + ((COL(i) / 3) | 0);
+const PEERS = Array.from({ length: 81 }, (_, i) => {
+  const s = new Set();
+  for (let j = 0; j < 81; j++) if (j !== i && (ROW(j) === ROW(i) || COL(j) === COL(i) || BOX(j) === BOX(i))) s.add(j);
+  return [...s];
+});
+
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashString(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function shuffle(arr, rng) {
+  for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+  return arr;
+}
+
+// Backtracking solver using bitmasks; always branches on the cell with the fewest candidates.
+// Returns the number of solutions found (stops at `limit`). With `rng`, tries digits in random
+// order and leaves the first solution in `out`.
+function solve(grid, limit, rng, out) {
+  const g = grid.slice(), rows = Array(9).fill(0), cols = Array(9).fill(0), boxes = Array(9).fill(0);
+  for (let i = 0; i < 81; i++) if (g[i]) {
+    const b = 1 << g[i];
+    if ((rows[ROW(i)] | cols[COL(i)] | boxes[BOX(i)]) & b) return 0;
+    rows[ROW(i)] |= b; cols[COL(i)] |= b; boxes[BOX(i)] |= b;
+  }
+  let count = 0;
+  (function search() {
+    let best = -1, bestMask = 0, bestN = 10;
+    for (let i = 0; i < 81; i++) if (!g[i]) {
+      const mask = ALL & ~(rows[ROW(i)] | cols[COL(i)] | boxes[BOX(i)]);
+      let n = 0; for (let m = mask; m; m &= m - 1) n++;
+      if (n < bestN) { best = i; bestMask = mask; bestN = n; if (n === 0) return; }
+    }
+    if (best === -1) { count++; if (out && count === 1) g.forEach((v, k) => out[k] = v); return; }
+    const digits = [];
+    for (let d = 1; d <= 9; d++) if (bestMask & (1 << d)) digits.push(d);
+    if (rng) shuffle(digits, rng);
+    const r = ROW(best), c = COL(best), bx = BOX(best);
+    for (const d of digits) {
+      const b = 1 << d;
+      g[best] = d; rows[r] |= b; cols[c] |= b; boxes[bx] |= b;
+      search();
+      g[best] = 0; rows[r] &= ~b; cols[c] &= ~b; boxes[bx] &= ~b;
+      if (count >= limit) return;
+    }
+  })();
+  return count;
+}
+
+const CLUES = { easy: 38, medium: 32, hard: 28, expert: 24 };
+
+// Builds a random full grid, then removes symmetric pairs of numbers while the puzzle
+// still has exactly one solution, until it reaches the clue target for the difficulty.
+function generate(difficulty, rng) {
+  // Removal can get stuck above the target, so try a few times and keep the sparsest puzzle.
+  let best = null;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const p = generateOnce(difficulty, rng);
+    if (!best || p.clues < best.clues) best = p;
+    if (best.clues <= CLUES[difficulty]) break;
+  }
+  return best;
+}
+
+function generateOnce(difficulty, rng) {
+  const solution = Array(81).fill(0);
+  solve(Array(81).fill(0), 1, rng, solution);
+  const puzzle = solution.slice();
+  let clues = 81;
+  const order = shuffle([...Array(41).keys()], rng); // cell 40 is the centre; others pair with 80 - i
+  for (const i of order) {
+    if (clues <= CLUES[difficulty]) break;
+    const j = 80 - i, a = puzzle[i], b = puzzle[j];
+    puzzle[i] = 0; puzzle[j] = 0;
+    if (solve(puzzle, 2) === 1) clues -= i === j ? 1 : 2;
+    else { puzzle[i] = a; puzzle[j] = b; }
+  }
+  return { puzzle, solution, clues };
+}
+
+// ---------- Daily puzzle ----------
+const LAUNCH = new Date(2026, 9, 7); // puzzle #1
+const DAILY_LEVEL = ["expert", "easy", "easy", "medium", "medium", "hard", "hard"]; // Sun..Sat
+const todayKey = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local time
+const dailyNumber = key => Math.round((new Date(key + "T00:00") - LAUNCH) / 86400000) + 1;
+const dailyLevel = key => DAILY_LEVEL[new Date(key + "T00:00").getDay()];
+
+// ---------- Storage (per device; wrapped because it can be unavailable) ----------
+const store = {
+  get(k, fallback) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+// ---------- Game state ----------
+const $ = id => document.getElementById(id);
+let game = null;        // { mode, dateKey, puzzle, solution, values, notes, seconds, mistakes, hints, done }
+let selected = -1;
+let notesMode = false;
+let history = [];
+let showMistakes = store.get("ff-sudoku-show-mistakes", true);
+
+const slot = mode => mode === "daily" ? "ff-sudoku-daily" : "ff-sudoku-game";
+const save = () => { if (game) { store.set(slot(game.mode), game); store.set("ff-sudoku-mode", game.mode); } };
+
+function newGame(mode) {
+  const dateKey = mode === "daily" ? todayKey() : null;
+  const level = mode === "daily" ? dailyLevel(dateKey) : mode;
+  const rng = mulberry32(mode === "daily" ? hashString("fenrir-sudoku-" + dateKey) : (Math.random() * 2 ** 32) >>> 0);
+  const { puzzle, solution } = generate(level, rng);
+  game = { mode, level, dateKey, puzzle, solution, values: puzzle.slice(), notes: Array(81).fill(0), seconds: 0, mistakes: 0, hints: 0, done: false };
+  history = []; selected = -1;
+  save(); render();
+}
+
+// Daily: resume today's saved game, otherwise build today's. Others: resume the saved game of that level.
+function startMode(mode, forceNew) {
+  const saved = store.get(slot(mode), null);
+  const usable = saved && !forceNew && (mode === "daily" ? saved.dateKey === todayKey() : saved.mode === mode);
+  if (usable) { game = saved; history = []; selected = -1; store.set("ff-sudoku-mode", mode); render(); return; }
+  document.body.classList.add("busy");
+  setTimeout(() => { newGame(mode); document.body.classList.remove("busy"); }, 20); // let the page paint first
+}
+
+function snapshot() {
+  history.push({ values: game.values.slice(), notes: game.notes.slice() });
+  if (history.length > 300) history.shift();
+}
+
+function place(i, d) {
+  if (game.done || i < 0 || game.puzzle[i]) return;
+  if (notesMode && d && game.values[i]) return;
+  snapshot();
+  if (notesMode && d) {
+    game.notes[i] ^= 1 << d;
+  } else if (game.values[i] === d || !d) {
+    game.values[i] = 0; game.notes[i] = 0;
+  } else {
+    game.values[i] = d; game.notes[i] = 0;
+    for (const p of PEERS[i]) game.notes[p] &= ~(1 << d);
+    if (d !== game.solution[i]) game.mistakes++;
+  }
+  afterMove(i);
+}
+
+function afterMove(i) {
+  if (game.values.every((v, k) => v === game.solution[k])) win();
+  save(); render();
+  if (i >= 0) flash(i);
+}
+
+function hint() {
+  if (game.done) return;
+  let i = selected;
+  if (i < 0 || game.puzzle[i] || game.values[i] === game.solution[i]) {
+    const open = game.values.map((v, k) => v === game.solution[k] ? -1 : k).filter(k => k >= 0);
+    if (!open.length) return;
+    i = open[Math.floor(Math.random() * open.length)];
+  }
+  snapshot();
+  const d = game.solution[i];
+  game.values[i] = d; game.notes[i] = 0;
+  for (const p of PEERS[i]) game.notes[p] &= ~(1 << d);
+  game.hints++; selected = i;
+  afterMove(i);
+}
+
+function undo() {
+  const last = history.pop();
+  if (!last || game.done) return;
+  game.values = last.values; game.notes = last.notes;
+  save(); render();
+}
+
+function fmtTime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = s % 60;
+  return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+}
+
+function dailyStreak() {
+  const done = store.get("ff-sudoku-daily-done", {});
+  let streak = 0, d = new Date();
+  if (!done[d.toLocaleDateString("en-CA")]) d.setDate(d.getDate() - 1); // today not done yet: count from yesterday
+  while (done[d.toLocaleDateString("en-CA")]) { streak++; d.setDate(d.getDate() - 1); }
+  return streak;
+}
+
+function win() {
+  game.done = true; selected = -1;
+  if (game.mode === "daily") {
+    const done = store.get("ff-sudoku-daily-done", {});
+    done[game.dateKey] = { seconds: game.seconds, mistakes: game.mistakes, hints: game.hints };
+    store.set("ff-sudoku-daily-done", done);
+  }
+  const level = game.level[0].toUpperCase() + game.level.slice(1);
+  $("winSub").textContent = game.mode === "daily" ? `Daily Sudoku #${dailyNumber(game.dateKey)} · ${level}` : level;
+  $("winResult").textContent = `${fmtTime(game.seconds)} · ${game.mistakes} mistake${game.mistakes === 1 ? "" : "s"} · ${game.hints} hint${game.hints === 1 ? "" : "s"}`;
+  const streak = game.mode === "daily" ? dailyStreak() : 0;
+  $("winStreak").textContent = streak > 1 ? `Daily streak: ${streak} days` : "";
+  $("share").textContent = "Copy result";
+  setTimeout(() => $("winDialog").showModal(), 500);
+}
+
+// ---------- Rendering ----------
+const board = $("board"), pad = $("pad");
+const cells = [];
+for (let i = 0; i < 81; i++) {
+  const el = document.createElement("div");
+  el.className = "cell" + (COL(i) % 3 === 2 ? " br" : "") + (ROW(i) % 3 === 2 ? " bb" : "") + (COL(i) === 8 ? " c8" : "") + (ROW(i) === 8 ? " r8" : "");
+  el.setAttribute("role", "gridcell");
+  el.addEventListener("click", () => { selected = i; render(); });
+  board.append(el); cells.push(el);
+}
+const padButtons = [];
+for (let d = 1; d <= 9; d++) {
+  const b = document.createElement("button");
+  b.innerHTML = `<b>${d}</b><small></small>`;
+  b.setAttribute("aria-label", "Number " + d);
+  b.addEventListener("click", () => place(selected, d));
+  pad.append(b); padButtons.push(b);
+}
+
+function render() {
+  if (!game) return;
+  const sv = selected >= 0 ? game.values[selected] : 0;
+  const counts = Array(10).fill(0);
+  game.values.forEach(v => counts[v]++);
+  for (let i = 0; i < 81; i++) {
+    const el = cells[i], v = game.values[i];
+    el.classList.toggle("given", !!game.puzzle[i]);
+    el.classList.toggle("selected", i === selected);
+    el.classList.toggle("peer", selected >= 0 && i !== selected && PEERS[selected].includes(i));
+    el.classList.toggle("same", !!sv && v === sv && i !== selected);
+    el.classList.toggle("error", showMistakes && !!v && v !== game.solution[i]);
+    if (v) {
+      el.textContent = v;
+    } else if (game.notes[i]) {
+      let html = '<div class="notes">';
+      for (let d = 1; d <= 9; d++) html += `<span>${game.notes[i] & (1 << d) ? d : ""}</span>`;
+      el.innerHTML = html + "</div>";
+    } else {
+      el.textContent = "";
+    }
+    el.setAttribute("aria-label", `Row ${ROW(i) + 1}, column ${COL(i) + 1}, ${v || "empty"}`);
+  }
+  padButtons.forEach((b, k) => {
+    const left = 9 - counts[k + 1];
+    b.querySelector("small").textContent = left > 0 ? left : "";
+    b.disabled = left <= 0 && !notesMode;
+  });
+  $("mistakes").textContent = "✕ " + game.mistakes;
+  $("timer").textContent = fmtTime(game.seconds);
+  $("mode").value = game.mode;
+  $("notesBtn").classList.toggle("on", notesMode);
+  $("notesBtn").setAttribute("aria-pressed", notesMode);
+  document.body.classList.toggle("notes-on", notesMode);
+  $("newGame").textContent = game.mode === "daily" ? "Restart" : "New game";
+  if (game.mode === "daily") {
+    const level = game.level[0].toUpperCase() + game.level.slice(1);
+    const streak = dailyStreak();
+    $("dailyInfo").textContent = `Daily Sudoku #${dailyNumber(game.dateKey)} · ${level}` + (streak ? ` · Streak: ${streak} day${streak === 1 ? "" : "s"}` : "") + (game.done ? " · Solved ✓" : "");
+  } else {
+    $("dailyInfo").textContent = "";
+  }
+}
+
+function flash(i) {
+  const el = cells[i];
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+}
+
+// ---------- Controls ----------
+$("mode").addEventListener("change", e => startMode(e.target.value));
+$("newGame").addEventListener("click", () => {
+  if (game && !game.done && game.values.some((v, k) => v && !game.puzzle[k]) && !confirm(game.mode === "daily" ? "Restart today's puzzle?" : "Start a new puzzle? Your current game will be lost.")) return;
+  startMode(game ? game.mode : "daily", true);
+});
+$("undo").addEventListener("click", undo);
+$("erase").addEventListener("click", () => place(selected, 0));
+$("hint").addEventListener("click", hint);
+$("notesBtn").addEventListener("click", () => { notesMode = !notesMode; render(); });
+$("showMistakes").checked = showMistakes;
+$("showMistakes").addEventListener("change", e => { showMistakes = e.target.checked; store.set("ff-sudoku-show-mistakes", showMistakes); render(); });
+$("winNew").addEventListener("click", () => {
+  $("winDialog").close();
+  startMode(game.mode === "daily" ? "medium" : game.mode, true);
+});
+$("share").addEventListener("click", async () => {
+  const text = (game.mode === "daily" ? `Fenrir Forge Daily Sudoku #${dailyNumber(game.dateKey)}\n` : `Fenrir Forge Sudoku (${game.level})\n`)
+    + `⏱ ${fmtTime(game.seconds)} · ✕ ${game.mistakes} · 💡 ${game.hints}\n${location.href.split("?")[0]}`;
+  try { await navigator.clipboard.writeText(text); $("share").textContent = "Copied ✓"; }
+  catch { prompt("Copy your result:", text); }
+});
+
+document.addEventListener("keydown", e => {
+  if (!game || $("winDialog").open || e.target.tagName === "SELECT") return;
+  const k = e.key;
+  if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === "z") { e.preventDefault(); undo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (k >= "1" && k <= "9") place(selected, +k);
+  else if (k === "Backspace" || k === "Delete" || k === "0") place(selected, 0);
+  else if (k.toLowerCase() === "n") { notesMode = !notesMode; render(); }
+  else if (k.startsWith("Arrow")) {
+    e.preventDefault();
+    if (selected < 0) selected = 40;
+    else {
+      const r = ROW(selected), c = COL(selected);
+      if (k === "ArrowUp") selected = ((r + 8) % 9) * 9 + c;
+      if (k === "ArrowDown") selected = ((r + 1) % 9) * 9 + c;
+      if (k === "ArrowLeft") selected = r * 9 + (c + 8) % 9;
+      if (k === "ArrowRight") selected = r * 9 + (c + 1) % 9;
+    }
+    render();
+  }
+});
+
+// Timer runs only while the page is visible and the puzzle is unsolved.
+setInterval(() => {
+  if (game && !game.done && document.visibilityState === "visible") {
+    game.seconds++;
+    $("timer").textContent = fmtTime(game.seconds);
+    if (game.seconds % 5 === 0) save();
+  }
+}, 1000);
+document.addEventListener("visibilitychange", save);
+
+startMode(store.get("ff-sudoku-mode", "daily"));
+</script>
+</body>
+</html>
