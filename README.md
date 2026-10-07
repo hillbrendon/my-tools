@@ -1,11 +1,14 @@
 # My Tools
 
-A static site collecting the small apps and tools I build. Hosted free on Cloudflare Pages.
+A static site collecting the small apps and tools I build. Hosted free on Cloudflare Workers
+at https://my-tools.hill-brendon.workers.dev.
+
+Only the `public/` folder is published (set in `wrangler.jsonc`). Anything outside it stays private.
 
 ## Adding a tool
 
-1. Create a folder, e.g. `pomodoro/`, with an `index.html` inside.
-2. Add a card for it in the root `index.html`.
+1. Create a folder inside `public/`, e.g. `public/pomodoro/`, with an `index.html` inside.
+2. Add a card for it in `public/index.html`.
 3. Commit and push. Cloudflare redeploys automatically.
 
 ## One-time setup
@@ -25,6 +28,6 @@ A static site collecting the small apps and tools I build. Hosted free on Cloudf
 ## Security notes
 
 - Everything runs in the browser, so **never put API keys or passwords in any file here**: anyone can read them.
-- `_headers` sets security headers (CSP, HSTS, clickjacking protection). If a tool loads scripts
+- `public/_headers` sets security headers (CSP, HSTS, clickjacking protection). If a tool loads scripts
   from a CDN not listed there, add the domain to `script-src` or the tool will break.
 - Check headers after deploying at https://securityheaders.com.

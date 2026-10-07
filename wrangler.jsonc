@@ -1,0 +1,11 @@
+{
+  "name": "my-tools",
+  "compatibility_date": "2026-10-06",
+  "observability": {
+    "enabled": true
+  },
+  // Only publish the public/ folder, so .git, README, etc. are never served.
+  "assets": {
+    "directory": "./public"
+  }
+}
