@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Runes · Fenrir Forge</title>
+<meta name="description" content="Runes: a free daily five-letter word puzzle. Six tries to find the hidden word, plus unlimited practice games.">
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root {
+    --correct: #ea580c;   /* ember: right letter, right spot */
+    --present: #2f6f9f;   /* steel blue: in the word, wrong spot */
+    --absent: #6b7280;
+    --tile-border: #c4c9cf;
+    --key: #dde1e5;
+    --tile: min(60px, calc((100vw - 56px) / 5), calc((100svh - 340px) / 6));
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --absent: #2b2f34; --tile-border: #4a5058; --key: #565d66; --present: #3b82b8; }
+  }
+  html, body { height: 100%; }
+  body {
+    max-width: 520px; padding: 12px 8px calc(10px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; -webkit-tap-highlight-color: transparent;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 8px; border-bottom: 1px solid var(--border); }
+  .back { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+  h1 { margin: 0; font-family: "Cinzel", Georgia, serif; font-size: 1.6rem; letter-spacing: 0.06em; }
+  .icons { display: flex; gap: 4px; }
+  .icon-btn { background: none; border: none; color: var(--text); padding: 6px; cursor: pointer; border-radius: 8px; }
+  .icon-btn:hover { background: var(--accent-soft); }
+  .icon-btn svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+  .modebar { display: flex; justify-content: center; gap: 6px; margin: 10px 0 4px; }
+  .modebar button {
+    font: inherit; font-size: 0.85rem; padding: 5px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  }
+  .modebar button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .subtitle { text-align: center; color: var(--muted); font-size: 0.85rem; min-height: 1.3em; }
+
+  main { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+  .board { display: grid; grid-template-rows: repeat(6, var(--tile)); gap: 6px; padding: 8px 0; }
+  .row { display: grid; grid-template-columns: repeat(5, var(--tile)); gap: 6px; }
+  .tile {
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--tile-border); border-radius: 6px;
+    font-family: "Cinzel", Georgia, serif; font-weight: 700; font-size: calc(var(--tile) * 0.52);
+    text-transform: uppercase; color: var(--text); user-select: none;
+  }
+  .tile.filled { border-color: var(--muted); animation: pop 0.1s ease; }
+  .tile.correct, .tile.present, .tile.absent { color: #fff; border-color: transparent; }
+  .tile.correct { background: var(--correct); }
+  .tile.present { background: var(--present); }
+  .tile.absent { background: var(--absent); }
+  .tile.flip { animation: flip 0.5s ease forwards; }
+  .row.shake { animation: shake 0.45s ease; }
+  .tile.bounce { animation: bounce 0.5s ease; }
+  @keyframes pop { 50% { transform: scale(1.1); } }
+  @keyframes flip { 0% { transform: rotateX(0); } 50% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+  @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+  @keyframes bounce { 40% { transform: translateY(-14px); } 70% { transform: translateY(3px); } }
+
+  .toast {
+    position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px;
+    font-weight: 600; font-size: 0.9rem; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 5; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+
+  .keyboard { display: flex; flex-direction: column; gap: 7px; padding: 4px 0; user-select: none; }
+  .krow { display: flex; gap: 5px; justify-content: center; }
+  .key {
+    flex: 1; max-width: 46px; height: 54px; border: none; border-radius: 6px;
+    background: var(--key); color: var(--text); font: inherit; font-weight: 700; font-size: 1rem;
+    text-transform: uppercase; cursor: pointer; touch-action: manipulation; padding: 0;
+  }
+  .key.wide { max-width: 70px; flex: 1.5; font-size: 0.75rem; }
+  .key.correct { background: var(--correct); color: #fff; }
+  .key.present { background: var(--present); color: #fff; }
+  .key.absent { background: var(--absent); color: #fff; opacity: 0.6; }
+  .key svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; vertical-align: middle; }
+  .spacer { flex: 0.5; max-width: 23px; }
+
+  dialog {
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text);
+    padding: 22px; width: min(92vw, 400px); max-height: 88svh;
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.5); }
+  dialog h2 { font-family: "Cinzel", Georgia, serif; margin: 0 0 10px; font-size: 1.3rem; text-align: center; }
+  dialog p, dialog li { font-size: 0.92rem; }
+  .close { position: absolute; top: 10px; right: 10px; }
+  .example { display: flex; gap: 4px; margin: 6px 0 2px; }
+  .example .tile { --tile: 36px; width: 36px; height: 36px; font-size: 1.1rem; }
+  .stat-row { display: flex; justify-content: space-around; text-align: center; margin: 8px 0 16px; }
+  .stat-row b { display: block; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+  .stat-row span { font-size: 0.72rem; color: var(--muted); }
+  .dist { display: grid; gap: 4px; font-size: 0.85rem; }
+  .dist div { display: flex; align-items: center; gap: 6px; }
+  .bar { background: var(--absent); color: #fff; padding: 1px 6px; text-align: right; min-width: 22px; border-radius: 3px; font-weight: 600; }
+  .bar.hl { background: var(--correct); }
+  .answer { text-align: center; font-size: 0.95rem; margin: 0 0 12px; }
+  .answer b { font-family: "Cinzel", Georgia, serif; letter-spacing: 0.15em; font-size: 1.2rem; }
+  .actions { display: flex; gap: 8px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+  .btn {
+    font: inherit; font-size: 0.9rem; font-weight: 600; padding: 10px 16px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .next { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <header>
+    <a class="back" href="../">&larr; Fenrir Forge</a>
+    <h1>Runes</h1>
+    <div class="icons">
+      <button class="icon-btn" id="helpBtn" aria-label="How to play"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></button>
+      <button class="icon-btn" id="statsBtn" aria-label="Statistics"><svg viewBox="0 0 24 24"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg></button>
+    </div>
+  </header>
+
+  <div class="modebar">
+    <button id="dailyBtn">Daily</button>
+    <button id="practiceBtn">Practice</button>
+  </div>
+  <div class="subtitle" id="subtitle"></div>
+
+  <main>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="board" id="board"></div>
+  </main>
+
+  <div class="keyboard" id="keyboard"></div>
+
+  <dialog id="helpDialog">
+    <button class="icon-btn close" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <h2>How to play</h2>
+    <p>Find the hidden five-letter word in six tries. After each guess the rune stones change colour:</p>
+    <div class="example"><div class="tile correct">w</div><div class="tile">o</div><div class="tile">l</div><div class="tile">v</div><div class="tile">e</div></div>
+    <p><b>Ember</b>: the letter is in the word and in the right spot.</p>
+    <div class="example"><div class="tile">p</div><div class="tile present">r</div><div class="tile">o</div><div class="tile">u</div><div class="tile">d</div></div>
+    <p><b>Blue</b>: the letter is in the word but in a different spot.</p>
+    <div class="example"><div class="tile">s</div><div class="tile">t</div><div class="tile absent">o</div><div class="tile">n</div><div class="tile">e</div></div>
+    <p><b>Grey</b>: the letter isn't in the word.</p>
+    <ul>
+      <li><b>Daily</b> is the same word for everyone, with a new one at midnight. Share your result without spoiling the answer.</li>
+      <li><b>Practice</b> gives you unlimited random words.</li>
+      <li>Guesses must be real words. Letters can repeat.</li>
+    </ul>
+    <div class="actions"><button class="btn primary" data-close>Play</button></div>
+  </dialog>
+
+  <dialog id="statsDialog">
+    <button class="icon-btn close" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <h2 id="statsTitle">Statistics</h2>
+    <p class="answer" id="answerLine" hidden></p>
+    <div class="stat-row">
+      <div><b id="sPlayed">0</b><span>Played</span></div>
+      <div><b id="sWin">0</b><span>Win %</span></div>
+      <div><b id="sStreak">0</b><span>Current streak</span></div>
+      <div><b id="sMax">0</b><span>Best streak</span></div>
+    </div>
+    <p style="font-weight:600;margin:0 0 6px">Daily guess distribution</p>
+    <div class="dist" id="dist"></div>
+    <div class="actions" id="endActions"></div>
+    <p class="next" id="nextLine"></p>
+  </dialog>
+
+<script src="words.js"></script>
+<script>
+// ---------- Words ----------
+const ANSWERS = atob(RUNES_ANSWERS).match(/.{5}/g);
+const ACCEPTED = new Set(RUNES_ACCEPTED.match(/.{5}/g));
+
+// ---------- Daily puzzle (#1 = 7 Oct 2026, local midnight rollover) ----------
+const LAUNCH = new Date(2026, 9, 7);
+const todayKey = () => new Date().toLocaleDateString("en-CA");
+const dayNumber = key => Math.round((new Date(key + "T00:00") - LAUNCH) / 86400000) + 1;
+const dailyAnswer = key => ANSWERS[((dayNumber(key) - 1) % ANSWERS.length + ANSWERS.length) % ANSWERS.length];
+
+// ---------- Storage (per device; can be unavailable) ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+const emptyStats = () => ({ played: 0, won: 0, streak: 0, maxStreak: 0, lastWinDay: null, dist: [0, 0, 0, 0, 0, 0] });
+
+// ---------- State ----------
+const $ = id => document.getElementById(id);
+let mode = store.get("ff-runes-mode", "daily");
+let game;           // { answer, guesses: [], done, won, dateKey? }
+let current = "";
+let busy = false;   // true while a guess is being revealed
+
+function loadGame() {
+  if (mode === "daily") {
+    const key = todayKey();
+    const saved = store.get("ff-runes-daily", null);
+    game = saved && saved.dateKey === key ? saved : { dateKey: key, answer: dailyAnswer(key), guesses: [], done: false, won: false };
+  } else {
+    game = store.get("ff-runes-practice", null) || newPractice();
+  }
+  current = "";
+  store.set("ff-runes-mode", mode);
+  saveGame(); renderAll();
+}
+function newPractice() {
+  return { answer: ANSWERS[Math.floor(Math.random() * ANSWERS.length)], guesses: [], done: false, won: false };
+}
+function saveGame() { store.set(mode === "daily" ? "ff-runes-daily" : "ff-runes-practice", game); }
+
+// Scores a guess, handling repeated letters: exact matches first, then "present" only
+// while that letter still has unmatched copies in the answer.
+function score(guess, answer) {
+  const result = Array(5).fill("absent"), left = {};
+  for (let i = 0; i < 5; i++) {
+    if (guess[i] === answer[i]) result[i] = "correct";
+    else left[answer[i]] = (left[answer[i]] || 0) + 1;
+  }
+  for (let i = 0; i < 5; i++) {
+    if (result[i] !== "correct" && left[guess[i]] > 0) { result[i] = "present"; left[guess[i]]--; }
+  }
+  return result;
+}
+
+// ---------- Board & keyboard ----------
+const board = $("board"), tiles = [];
+for (let r = 0; r < 6; r++) {
+  const row = document.createElement("div");
+  row.className = "row";
+  tiles.push([]);
+  for (let c = 0; c < 5; c++) {
+    const t = document.createElement("div");
+    t.className = "tile";
+    row.append(t); tiles[r].push(t);
+  }
+  board.append(row);
+}
+
+const LAYOUT = ["qwertyuiop", " asdfghjkl ", "Ezxcvbnm<"];
+const keys = {};
+const backspaceSvg = '<svg viewBox="0 0 24 24"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="m18 9-6 6M12 9l6 6"/></svg>';
+for (const line of LAYOUT) {
+  const row = document.createElement("div");
+  row.className = "krow";
+  for (const ch of line) {
+    if (ch === " ") { const s = document.createElement("div"); s.className = "spacer"; row.append(s); continue; }
+    const k = document.createElement("button");
+    k.className = "key";
+    if (ch === "E") { k.textContent = "Enter"; k.classList.add("wide"); k.onclick = submit; }
+    else if (ch === "<") { k.innerHTML = backspaceSvg; k.classList.add("wide"); k.setAttribute("aria-label", "Backspace"); k.onclick = backspace; }
+    else { k.textContent = ch; k.onclick = () => type(ch); keys[ch] = k; }
+    row.append(k);
+  }
+  $("keyboard").append(row);
+}
+
+function renderAll() {
+  const rank = { absent: 1, present: 2, correct: 3 }, best = {};
+  for (let r = 0; r < 6; r++) {
+    const guess = game.guesses[r], res = guess ? score(guess, game.answer) : null;
+    for (let c = 0; c < 5; c++) {
+      const t = tiles[r][c];
+      t.className = "tile";
+      if (guess) {
+        t.textContent = guess[c];
+        t.classList.add(res[c]);
+        if (!best[guess[c]] || rank[res[c]] > rank[best[guess[c]]]) best[guess[c]] = res[c];
+      } else if (r === game.guesses.length && current[c]) {
+        t.textContent = current[c]; t.classList.add("filled");
+      } else {
+        t.textContent = "";
+      }
+    }
+  }
+  for (const [ch, k] of Object.entries(keys)) {
+    k.className = "key" + (best[ch] ? " " + best[ch] : "");
+  }
+  $("dailyBtn").classList.toggle("active", mode === "daily");
+  $("practiceBtn").classList.toggle("active", mode === "practice");
+  $("subtitle").textContent = mode === "daily"
+    ? `Daily Runes #${dayNumber(game.dateKey)}` + (game.done ? (game.won ? " · Solved ✓" : " · Better luck tomorrow") : "")
+    : "Practice · unlimited words";
+}
+
+function renderCurrentRow() {
+  const r = game.guesses.length;
+  if (r >= 6) return;
+  for (let c = 0; c < 5; c++) {
+    const t = tiles[r][c];
+    t.textContent = current[c] || "";
+    t.className = "tile" + (current[c] ? " filled" : "");
+  }
+}
+
+// ---------- Input ----------
+function type(ch) {
+  if (busy || game.done || current.length >= 5) return;
+  current += ch; renderCurrentRow();
+}
+function backspace() {
+  if (busy || game.done) return;
+  current = current.slice(0, -1); renderCurrentRow();
+}
+function submit() {
+  if (busy || game.done) return;
+  const row = board.children[game.guesses.length];
+  if (current.length < 5) return reject(row, "Not enough letters");
+  if (!ACCEPTED.has(current)) return reject(row, "Not in word list");
+
+  const guess = current, res = score(guess, game.answer), r = game.guesses.length;
+  game.guesses.push(guess); current = "";
+  game.won = guess === game.answer;
+  game.done = game.won || game.guesses.length === 6;
+  if (game.done && mode === "daily") recordDaily();
+  saveGame();
+
+  // Reveal tiles one at a time, then refresh the keyboard and finish.
+  busy = true;
+  res.forEach((state, c) => setTimeout(() => {
+    const t = tiles[r][c];
+    t.classList.add("flip");
+    setTimeout(() => { t.classList.remove("filled"); t.classList.add(state); }, 250);
+  }, c * 300));
+  setTimeout(() => {
+    busy = false; renderAll();
+    if (game.won) {
+      tiles[r].forEach((t, c) => setTimeout(() => t.classList.add("bounce"), c * 90));
+      toast(["Legendary!", "Magnificent!", "Impressive!", "Splendid!", "Great!", "Phew!"][r]);
+      setTimeout(showStats, 1600);
+    } else if (game.done) {
+      toast(game.answer.toUpperCase(), 2500);
+      setTimeout(showStats, 1800);
+    }
+  }, 5 * 300 + 250);
+}
+function reject(row, msg) {
+  row.classList.remove("shake"); void row.offsetWidth; row.classList.add("shake");
+  toast(msg);
+}
+
+let toastTimer;
+function toast(msg, ms = 1400) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || document.querySelector("dialog[open]")) return;
+  if (e.key === "Enter") { e.preventDefault(); submit(); }
+  else if (e.key === "Backspace") backspace();
+  else if (/^[a-zA-Z]$/.test(e.key)) type(e.key.toLowerCase());
+});
+
+// ---------- Stats ----------
+function recordDaily() {
+  const s = store.get("ff-runes-stats", emptyStats()), day = dayNumber(game.dateKey);
+  s.played++;
+  if (game.won) {
+    s.won++;
+    s.streak = s.lastWinDay === day - 1 ? s.streak + 1 : 1;
+    s.maxStreak = Math.max(s.maxStreak, s.streak);
+    s.lastWinDay = day;
+    s.dist[game.guesses.length - 1]++;
+  } else {
+    s.streak = 0;
+  }
+  store.set("ff-runes-stats", s);
+}
+
+function showStats() {
+  const s = store.get("ff-runes-stats", emptyStats());
+  const streak = s.lastWinDay !== null && s.lastWinDay >= dayNumber(todayKey()) - 1 ? s.streak : 0;
+  $("sPlayed").textContent = s.played;
+  $("sWin").textContent = s.played ? Math.round((s.won / s.played) * 100) : 0;
+  $("sStreak").textContent = streak;
+  $("sMax").textContent = s.maxStreak;
+
+  const max = Math.max(1, ...s.dist), dist = $("dist");
+  dist.replaceChildren();
+  const highlight = mode === "daily" && game.won ? game.guesses.length - 1 : -1;
+  s.dist.forEach((n, i) => {
+    const row = document.createElement("div"), bar = document.createElement("span");
+    bar.className = "bar" + (i === highlight ? " hl" : "");
+    bar.style.width = Math.max(8, (n / max) * 100) + "%";
+    bar.textContent = n;
+    row.append(String(i + 1), bar);
+    dist.append(row);
+  });
+
+  const answerLine = $("answerLine");
+  answerLine.hidden = !game.done;
+  if (game.done) {
+    answerLine.replaceChildren(game.won ? "You found " : "The word was ", Object.assign(document.createElement("b"), { textContent: game.answer.toUpperCase() }));
+  }
+  $("statsTitle").textContent = game.done ? (game.won ? "Well forged!" : "The runes held firm") : "Statistics";
+
+  const actions = $("endActions");
+  actions.replaceChildren();
+  if (game.done && mode === "daily") actions.append(button("Share result", "", share));
+  if (game.done) actions.append(button(mode === "daily" ? "Play practice" : "New word", "primary", () => {
+    $("statsDialog").close();
+    mode = "practice";
+    if (store.get("ff-runes-practice", { done: true }).done) store.set("ff-runes-practice", newPractice());
+    loadGame();
+  }));
+  $("nextLine").textContent = mode === "daily" && game.done ? "A new daily word arrives at midnight." : "";
+  $("statsDialog").showModal();
+}
+
+function button(label, cls, onClick) {
+  const b = document.createElement("button");
+  b.className = "btn " + cls; b.textContent = label; b.onclick = onClick;
+  return b;
+}
+
+async function share(e) {
+  const squares = { correct: "🟧", present: "🟦", absent: "⬛" };
+  const grid = game.guesses.map(g => score(g, game.answer).map(s => squares[s]).join("")).join("\n");
+  const text = `Runes #${dayNumber(game.dateKey)} ${game.won ? game.guesses.length : "X"}/6\n\n${grid}\n\n${location.href.split("?")[0]}`;
+  try {
+    if (navigator.share && matchMedia("(pointer: coarse)").matches) await navigator.share({ text });
+    else { await navigator.clipboard.writeText(text); e.target.textContent = "Copied ✓"; }
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+    prompt("Copy your result:", text);
+  }
+}
+
+// ---------- Wiring ----------
+$("dailyBtn").onclick = () => { if (mode !== "daily" && !busy) { mode = "daily"; loadGame(); } };
+$("practiceBtn").onclick = () => { if (mode !== "practice" && !busy) { mode = "practice"; loadGame(); } };
+$("helpBtn").onclick = () => $("helpDialog").showModal();
+$("statsBtn").onclick = showStats;
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close(); }));
+document.querySelectorAll("button").forEach(b => b.addEventListener("mousedown", e => e.preventDefault())); // keep keyboard focus off buttons so Enter submits
+
+loadGame();
+if (!store.get("ff-runes-seen-help", false)) { $("helpDialog").showModal(); store.set("ff-runes-seen-help", true); }
+// Roll over to the new daily word if the page is left open past midnight.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && mode === "daily" && game.dateKey !== todayKey() && !busy) loadGame();
+});
+</script>
+</body>
+</html>
