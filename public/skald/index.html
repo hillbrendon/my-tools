@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skald · Fenrir Forge</title>
+<meta name="description" content="Skald: a free word puzzle with 400 levels. Swipe letters to find every hidden word. Gets harder as you go and saves your progress.">
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { height: 100%; }
+  body {
+    max-width: 520px; padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; -webkit-tap-highlight-color: transparent; user-select: none;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .back { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+  h1 { margin: 0; font-family: "Cinzel", Georgia, serif; font-size: 1.5rem; letter-spacing: 0.06em; }
+  .coins {
+    display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .coins .rune { font-size: 1.1rem; }
+  .level-info { text-align: center; margin: 8px 0 2px; }
+  .level-info b { font-family: "Cinzel", Georgia, serif; font-size: 1.05rem; }
+  .level-info span { display: block; color: var(--muted); font-size: 0.8rem; }
+
+  .words {
+    flex: 1; display: flex; flex-wrap: wrap; align-content: center; justify-content: center;
+    gap: var(--gap, 8px) 14px; padding: 8px 0; min-height: 120px;
+  }
+  .word { display: flex; gap: 3px; }
+  .box {
+    width: var(--box, 30px); height: var(--box, 30px); border-radius: 5px;
+    background: var(--surface); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: calc(var(--box, 30px) * 0.6); text-transform: uppercase; color: var(--text);
+  }
+  .box.hint { color: var(--muted); }
+  .word.found .box { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .word.pop .box { animation: pop 0.4s ease; }
+  .word.pop .box:nth-child(2) { animation-delay: 0.04s; } .word.pop .box:nth-child(3) { animation-delay: 0.08s; }
+  .word.pop .box:nth-child(4) { animation-delay: 0.12s; } .word.pop .box:nth-child(5) { animation-delay: 0.16s; }
+  .word.pop .box:nth-child(6) { animation-delay: 0.2s; } .word.pop .box:nth-child(7) { animation-delay: 0.24s; }
+  .word.again .box { animation: flashword 0.5s ease; }
+  @keyframes pop { 50% { transform: scale(1.2); } }
+  @keyframes flashword { 50% { background: var(--present, #2f6f9f); border-color: transparent; } }
+
+  .preview { height: 44px; display: flex; align-items: center; justify-content: center; }
+  .preview span {
+    padding: 4px 14px; border-radius: 8px; background: var(--accent); color: #fff;
+    font-weight: 700; font-size: 1.4rem; letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .preview span:empty { display: none; }
+  .preview.bad span { background: var(--muted); animation: shake 0.4s ease; }
+  .preview.bonus span { background: #2f6f9f; }
+  @keyframes shake { 25%, 75% { transform: translateX(-6px); } 50% { transform: translateX(6px); } }
+  .msg { text-align: center; color: var(--muted); font-size: 0.85rem; height: 1.3em; }
+
+  .play { display: flex; align-items: center; justify-content: center; gap: 10px; padding-bottom: 6px; }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .round {
+    width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font: inherit; font-size: 0.62rem; gap: 1px; touch-action: manipulation; position: relative;
+  }
+  .round:hover { border-color: var(--accent); }
+  .round svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .round .badge {
+    position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; border-radius: 10px; padding: 0 5px;
+    background: #2f6f9f; color: #fff; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .round:disabled { opacity: 0.4; cursor: default; }
+
+  .wheel {
+    --size: min(calc(100vw - 150px), 270px, calc(100svh - 470px));
+    position: relative; width: max(190px, var(--size)); aspect-ratio: 1; flex: none;
+    border-radius: 50%; background: var(--surface); border: 1px solid var(--border); touch-action: none;
+  }
+  .wheel svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .wheel polyline { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; opacity: 0.75; }
+  .letter {
+    position: absolute; width: 23%; height: 23%; transform: translate(-50%, -50%); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font-family: "Cinzel", Georgia, serif; font-weight: 700; font-size: calc(var(--size) * 0.12); text-transform: uppercase;
+    color: var(--text); transition: left 0.3s ease, top 0.3s ease;
+  }
+  .letter.on { background: var(--accent); color: #fff; }
+
+  .tapbar { display: flex; gap: 8px; justify-content: center; height: 34px; margin-bottom: 4px; }
+  .tapbar button {
+    font: inherit; font-size: 0.85rem; font-weight: 600; padding: 4px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  .tapbar .go { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tapbar[hidden] { display: flex; visibility: hidden; }
+
+  dialog {
+    border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text);
+    padding: 22px; width: min(92vw, 380px); text-align: center;
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.5); }
+  dialog h2 { font-family: "Cinzel", Georgia, serif; margin: 6px 0; }
+  dialog p { color: var(--muted); margin: 6px 0; }
+  dialog img { width: 60px; height: 60px; }
+  .earned { font-size: 1.3rem; font-weight: 700; color: var(--accent); margin: 12px 0 !important; }
+  .btn {
+    font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; margin-top: 10px;
+  }
+  .btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+  .bonus-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0; }
+  .bonus-list span { padding: 3px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
+  .help-list { text-align: left; color: var(--text); font-size: 0.92rem; padding-left: 20px; }
+  .help-list li { margin: 6px 0; }
+</style>
+</head>
+<body>
+  <header>
+    <a class="back" href="../">&larr; Fenrir Forge</a>
+    <h1>Skald</h1>
+    <div class="coins" title="Coins"><span class="rune">ᚠ</span><span id="coins">0</span></div>
+  </header>
+
+  <div class="level-info"><b id="levelTitle">Level 1</b><span id="chapter"></span></div>
+
+  <div class="words" id="words"></div>
+
+  <div class="preview" id="preview"><span id="previewText"></span></div>
+  <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  <div class="tapbar" id="tapbar" hidden>
+    <button id="tapClear">Clear</button>
+    <button class="go" id="tapGo">Enter</button>
+  </div>
+
+  <div class="play">
+    <div class="side">
+      <button class="round" id="helpBtn" aria-label="How to play"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</button>
+      <button class="round" id="shuffleBtn" aria-label="Shuffle letters"><svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>Shuffle</button>
+    </div>
+    <div class="wheel" id="wheel"><svg id="lines"><polyline id="line" points=""/></svg></div>
+    <div class="side">
+      <button class="round" id="bonusBtn" aria-label="Bonus words"><svg viewBox="0 0 24 24"><path d="M12 2 15 9l7 .5-5.5 4.5L18 21l-6-4-6 4 1.5-7L2 9.5 9 9Z"/></svg>Bonus<span class="badge" id="bonusCount" hidden>0</span></button>
+      <button class="round" id="hintBtn" aria-label="Hint, costs 20 coins"><svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V16h8v-1.3A7 7 0 0 0 12 2Z"/></svg>Hint ᚠ20</button>
+    </div>
+  </div>
+
+  <dialog id="doneDialog">
+    <img src="../logo.svg" alt="">
+    <h2 id="doneTitle">Level complete</h2>
+    <p id="doneSub"></p>
+    <p class="earned" id="doneEarned"></p>
+    <button class="btn" id="nextBtn">Next level</button>
+  </dialog>
+
+  <dialog id="bonusDialog">
+    <h2>Bonus words</h2>
+    <p>Extra words you found that aren't needed for this level. Each one earns ᚠ2.</p>
+    <div class="bonus-list" id="bonusList"></div>
+    <button class="btn ghost" data-close>Close</button>
+  </dialog>
+
+  <dialog id="helpDialog">
+    <h2>How to play</h2>
+    <ul class="help-list">
+      <li><b>Swipe</b> across the letters in the circle to spell a word, then lift your finger. Or tap letters one at a time and press Enter.</li>
+      <li>Find every word shown in the boxes to finish the level. Words must be 3 or more letters.</li>
+      <li>Found a real word that isn't in the boxes? It's a <b>bonus word</b>, worth ᚠ2.</li>
+      <li>Earn coins (ᚠ) by finishing levels. Spend 20 on a <b>hint</b> to reveal a letter.</li>
+      <li><b>Shuffle</b> rearranges the letters, which can help you spot new words.</li>
+      <li>There are 400 levels. They get longer and harder as you go, and your progress saves on this device.</li>
+    </ul>
+    <button class="btn" data-close>Let's play</button>
+  </dialog>
+
+<script src="levels.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+const CHAPTERS = ["The Hearth", "The Longhouse", "The Fjord", "The Mead Hall", "The Rune Stone", "The Shield Wall",
+  "The Longship", "The Northern Sea", "The Frozen Pass", "The Iron Wood", "The Wolf's Den", "The Great Hall",
+  "The Bifrost", "Asgard's Gate", "The World Tree", "The Norns' Well", "The Skald's Saga", "Valhalla",
+  "The Twilight", "Legend"];
+const HINT_COST = 20, BONUS_COIN = 2;
+
+// progress: { level (1-based), coins, found: [], bonus: [], revealed: {word: [letter indexes]}, wheel: "letters" }
+let p = store.get("ff-skald", null) || { level: 1, coins: 50, found: [], bonus: [], revealed: {}, wheel: null };
+let L;              // current level data { letters, words, bonus }
+let selection = []; // indexes into letters
+let tapMode = false;
+
+const save = () => store.set("ff-skald", p);
+const levelIndex = () => (p.level - 1) % SKALD_LEVELS.length;
+const reward = () => 10 + Math.floor((p.level - 1) / 40) * 2;
+
+function loadLevel() {
+  const [wheel, words, bonus] = SKALD_LEVELS[levelIndex()];
+  L = { letters: (p.wheel && p.wheel.length === wheel.length ? p.wheel : wheel).split(""), words, bonus: new Set(bonus) };
+  selection = []; tapMode = false;
+  $("levelTitle").textContent = "Level " + p.level;
+  $("chapter").textContent = CHAPTERS[Math.min(Math.floor(levelIndex() / 20), CHAPTERS.length - 1)] + (p.level > SKALD_LEVELS.length ? " · Encore" : "");
+  buildWords(); buildWheel(); updateUI();
+}
+
+// ---------- Word boxes ----------
+function buildWords() {
+  const box = $("words");
+  box.replaceChildren();
+  const n = L.words.length, longest = Math.max(...L.words.map(w => w.length));
+  // Smaller boxes for levels with lots of words so everything fits on a phone.
+  const size = n > 16 ? 26 : n > 11 ? 28 : n > 7 ? 30 : 34;
+  box.style.setProperty("--box", Math.min(size, Math.floor((Math.min(innerWidth, 520) - 40) / (longest + 1)) - 3) + "px");
+  box.style.setProperty("--gap", n > 14 ? "6px" : "8px");
+  for (const w of L.words) {
+    const row = document.createElement("div");
+    row.className = "word";
+    row.dataset.word = w;
+    for (let i = 0; i < w.length; i++) row.append(Object.assign(document.createElement("div"), { className: "box" }));
+    box.append(row);
+  }
+}
+
+function renderWords() {
+  for (const row of $("words").children) {
+    const w = row.dataset.word, found = p.found.includes(w), rev = p.revealed[w] || [];
+    row.classList.toggle("found", found);
+    [...row.children].forEach((b, i) => {
+      const show = found || rev.includes(i);
+      b.textContent = show ? w[i] : "";
+      b.classList.toggle("hint", !found && rev.includes(i));
+    });
+  }
+}
+
+// ---------- Wheel ----------
+const wheel = $("wheel");
+let letterEls = [];
+function buildWheel() {
+  letterEls.forEach(el => el.remove());
+  letterEls = L.letters.map((ch, i) => {
+    const el = document.createElement("div");
+    el.className = "letter";
+    el.textContent = ch;
+    el.dataset.i = i;
+    wheel.append(el);
+    return el;
+  });
+  placeLetters();
+}
+function placeLetters() {
+  const n = L.letters.length, r = n > 6 ? 36 : 34;
+  letterEls.forEach((el, i) => {
+    const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+    el.style.left = 50 + r * Math.cos(a) + "%";
+    el.style.top = 50 + r * Math.sin(a) + "%";
+  });
+}
+function centre(i) {
+  const w = wheel.getBoundingClientRect(), e = letterEls[i].getBoundingClientRect();
+  return [e.left + e.width / 2 - w.left, e.top + e.height / 2 - w.top];
+}
+function drawLine(extra) {
+  const pts = selection.map(centre);
+  if (extra && pts.length) pts.push(extra);
+  $("line").setAttribute("points", pts.map(pt => pt.join(",")).join(" "));
+}
+function letterAt(x, y) {
+  const w = wheel.getBoundingClientRect(), radius = letterEls[0].getBoundingClientRect().width * 0.6;
+  for (let i = 0; i < letterEls.length; i++) {
+    const [cx, cy] = centre(i);
+    if (Math.hypot(x - w.left - cx, y - w.top - cy) < radius) return i;
+  }
+  return -1;
+}
+
+let dragging = false, moved = false;
+wheel.addEventListener("pointerdown", e => {
+  const i = letterAt(e.clientX, e.clientY);
+  if (i < 0) return;
+  e.preventDefault();
+  if (tapMode) {
+    if (selection.includes(i)) { if (selection[selection.length - 1] === i) { selection.pop(); updateSelection(); } return; }
+    selection.push(i); updateSelection(); return;
+  }
+  wheel.setPointerCapture(e.pointerId);
+  dragging = true; moved = false;
+  selection = [i]; updateSelection();
+});
+wheel.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const w = wheel.getBoundingClientRect(), i = letterAt(e.clientX, e.clientY);
+  if (i >= 0 && !selection.includes(i)) { selection.push(i); moved = true; updateSelection(); }
+  else if (i >= 0 && selection.length > 1 && selection[selection.length - 2] === i) { selection.pop(); updateSelection(); } // slide back to undo
+  drawLine([e.clientX - w.left, e.clientY - w.top]);
+});
+wheel.addEventListener("pointerup", () => {
+  if (!dragging) return;
+  dragging = false;
+  if (!moved && selection.length === 1) { tapMode = true; updateSelection(); return; } // a tap: switch to tap-to-spell
+  submit();
+});
+wheel.addEventListener("pointercancel", () => { dragging = false; clearSelection(); });
+
+function updateSelection() {
+  letterEls.forEach((el, i) => el.classList.toggle("on", selection.includes(i)));
+  $("previewText").textContent = selection.map(i => L.letters[i]).join("");
+  $("preview").className = "preview";
+  $("tapbar").hidden = !tapMode;
+  drawLine();
+}
+function clearSelection() {
+  selection = []; tapMode = false; updateSelection();
+}
+
+// ---------- Guessing ----------
+function submit() {
+  const word = selection.map(i => L.letters[i]).join("");
+  tapMode = false;
+  $("tapbar").hidden = true;
+  if (word.length < 3) { clearSelection(); return; }
+  if (L.words.includes(word)) {
+    if (p.found.includes(word)) { result("again", "Already found"); flashWord(word, "again"); return; }
+    p.found.push(word);
+    delete p.revealed[word];
+    save(); renderWords(); flashWord(word, "pop");
+    result("good", "");
+    checkDone();
+  } else if (L.bonus.has(word)) {
+    if (p.bonus.includes(word)) { result("bad", "Bonus word already found"); return; }
+    p.bonus.push(word); p.coins += BONUS_COIN;
+    save(); updateUI();
+    result("bonus", `Bonus word! +ᚠ${BONUS_COIN}`);
+  } else {
+    result("bad", "Not in this puzzle");
+  }
+}
+function result(kind, msg) {
+  $("preview").className = "preview " + kind;
+  $("msg").textContent = msg;
+  const keep = kind === "good" ? 250 : 650;
+  setTimeout(() => { selection = []; letterEls.forEach(el => el.classList.remove("on")); drawLine(); }, 120);
+  setTimeout(() => { $("previewText").textContent = ""; $("preview").className = "preview"; }, keep);
+  clearTimeout(result.t);
+  result.t = setTimeout(() => $("msg").textContent = "", 1800);
+}
+function flashWord(word, cls) {
+  const row = [...$("words").children].find(r => r.dataset.word === word);
+  if (!row) return;
+  row.classList.remove(cls); void row.offsetWidth; row.classList.add(cls);
+}
+
+function hint() {
+  if (p.coins < HINT_COST) { $("msg").textContent = `You need ᚠ${HINT_COST} for a hint. Finish levels or find bonus words to earn more.`; return; }
+  const open = L.words.filter(w => !p.found.includes(w));
+  if (!open.length) return;
+  // Reveal the next hidden letter of the shortest unfinished word.
+  const w = open.sort((a, b) => a.length - b.length || (p.revealed[b] || []).length - (p.revealed[a] || []).length)[0];
+  const rev = p.revealed[w] || (p.revealed[w] = []);
+  const next = [...w].findIndex((_, i) => !rev.includes(i));
+  rev.push(next);
+  p.coins -= HINT_COST;
+  if (rev.length === w.length) { p.found.push(w); delete p.revealed[w]; flashWord(w, "pop"); }
+  save(); updateUI();
+  checkDone();
+}
+
+function checkDone() {
+  if (!L.words.every(w => p.found.includes(w))) return;
+  const earned = reward();
+  p.coins += earned;
+  save();
+  $("doneTitle").textContent = ["Well sung!", "Splendid!", "Mighty!", "Masterful!", "Legendary!"][Math.floor(Math.random() * 5)];
+  $("doneSub").textContent = `Level ${p.level} complete` + (p.bonus.length ? ` · ${p.bonus.length} bonus word${p.bonus.length === 1 ? "" : "s"}` : "");
+  $("doneEarned").textContent = `+ᚠ${earned}`;
+  $("nextBtn").textContent = p.level === SKALD_LEVELS.length ? "Play the encore" : "Next level";
+  updateUI();
+  setTimeout(() => $("doneDialog").showModal(), 700);
+}
+
+function nextLevel() {
+  p.level++; p.found = []; p.bonus = []; p.revealed = {}; p.wheel = null;
+  save(); $("doneDialog").close(); loadLevel();
+}
+
+function shuffle() {
+  if (selection.length) return;
+  const order = L.letters.map((_, i) => i);
+  do { for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } }
+  while (order.every((v, i) => v === i));
+  L.letters = order.map(i => L.letters[i]);
+  letterEls = order.map(i => letterEls[i]);
+  letterEls.forEach((el, i) => el.dataset.i = i);
+  p.wheel = L.letters.join(""); save();
+  placeLetters();
+}
+
+function updateUI() {
+  $("coins").textContent = p.coins;
+  $("bonusCount").textContent = p.bonus.length;
+  $("bonusCount").hidden = !p.bonus.length;
+  $("hintBtn").disabled = L.words.every(w => p.found.includes(w));
+  renderWords();
+}
+
+// ---------- Wiring ----------
+$("shuffleBtn").onclick = shuffle;
+$("hintBtn").onclick = hint;
+$("nextBtn").onclick = nextLevel;
+$("tapGo").onclick = () => submit();
+$("tapClear").onclick = clearSelection;
+$("helpBtn").onclick = () => $("helpDialog").showModal();
+$("bonusBtn").onclick = () => {
+  const list = $("bonusList");
+  list.replaceChildren(...(p.bonus.length ? p.bonus.map(w => Object.assign(document.createElement("span"), { textContent: w })) : [Object.assign(document.createElement("p"), { textContent: "None yet. Try making other words from these letters!" })]));
+  $("bonusDialog").showModal();
+};
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+$("doneDialog").addEventListener("cancel", e => { e.preventDefault(); nextLevel(); });
+
+// Keyboard: type letters that are on the wheel, Enter to submit, Backspace to delete.
+document.addEventListener("keydown", e => {
+  if (document.querySelector("dialog[open]") || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === "enter") { if (selection.length) submit(); return; }
+  if (k === "backspace") { selection.pop(); if (!selection.length) tapMode = false; updateSelection(); return; }
+  if (k === " ") { e.preventDefault(); shuffle(); return; }
+  const i = L.letters.findIndex((ch, idx) => ch === k && !selection.includes(idx));
+  if (i >= 0) { tapMode = true; selection.push(i); updateSelection(); }
+});
+addEventListener("resize", () => { buildWords(); renderWords(); drawLine(); });
+
+loadLevel();
+if (!store.get("ff-skald-seen-help", false)) { $("helpDialog").showModal(); store.set("ff-skald-seen-help", true); }
+// If the level was finished but the page closed before moving on, show the completion again.
+if (L.words.every(w => p.found.includes(w))) { p.coins -= reward(); checkDone(); }
+</script>
+</body>
+</html>
