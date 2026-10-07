@@ -1,0 +1,55 @@
+/* Shared layout for the Fenrir Forge arcade classics (Serpent, Stonefall, Shieldbreaker, Forge). */
+html, body { height: 100%; }
+body {
+  max-width: 520px; padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+}
+.g-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.g-head .back { color: var(--accent); text-decoration: none; font-size: 0.9rem; min-width: 90px; }
+.g-head h1 { margin: 0; font-family: "Cinzel", Georgia, serif; font-size: 1.45rem; letter-spacing: 0.05em; }
+.g-head .spacer { min-width: 90px; display: flex; justify-content: flex-end; }
+.g-head .back { white-space: nowrap; }
+@media (max-width: 420px) {
+  .g-head h1 { font-size: 1.15rem; }
+  .g-head .back, .g-head .spacer { min-width: 70px; font-size: 0.82rem; }
+}
+.icon-btn { background: none; border: none; color: var(--text); padding: 6px; cursor: pointer; border-radius: 8px; }
+.icon-btn:hover { background: var(--accent-soft); }
+.icon-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+.g-scores { display: flex; justify-content: center; gap: 6px; margin: 10px 0; }
+.g-score {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 4px 8px; text-align: center; flex: 0 1 96px; min-width: 0;
+}
+.g-score span { display: block; font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.g-score b { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+
+.g-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: flex-start; justify-content: center; }
+.g-stage canvas { display: block; border-radius: 12px; touch-action: none; max-width: 100%; outline: 1px solid var(--border); }
+
+.g-overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center; padding: 24px; border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(2px);
+}
+.g-overlay[hidden] { display: none; }
+.g-overlay h2 { font-family: "Cinzel", Georgia, serif; font-size: 1.9rem; margin: 0; }
+.g-overlay p { margin: 0; color: var(--muted); max-width: 300px; line-height: 1.45; }
+.g-btn {
+  font: inherit; font-weight: 700; font-size: 1rem; padding: 12px 28px; border-radius: 10px; cursor: pointer;
+  border: none; background: var(--accent); color: #fff; margin-top: 6px;
+}
+
+.g-pad { display: grid; gap: 8px; margin: 10px auto 0; touch-action: none; }
+.g-pad button {
+  font: inherit; font-size: 1.2rem; height: 58px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  display: flex; align-items: center; justify-content: center; touch-action: none;
+}
+.g-pad button:active { background: var(--accent-soft); border-color: var(--accent); }
+.g-pad svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.g-hint { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 8px; }
+@media (pointer: fine) { .touch-only { display: none !important; } }
+@media (pointer: coarse) { .mouse-only { display: none !important; } }

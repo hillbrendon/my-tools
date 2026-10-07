@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stonefall · Fenrir Forge</title>
+<meta name="description" content="Stonefall: stack the falling rune stones and clear full rows. Free classic block-stacking game.">
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../games.css">
+<style>
+  .g-score.next { padding: 4px 8px; min-width: 64px; }
+  #next { display: block; margin: 2px auto 0; }
+</style>
+</head>
+<body>
+  <div class="g-head">
+    <a class="back" href="../">&larr; Fenrir Forge</a>
+    <h1>Stonefall</h1>
+    <div class="spacer"><button class="icon-btn" id="pauseBtn" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></button></div>
+  </div>
+  <div class="g-scores">
+    <div class="g-score"><span>Score</span><b id="score">0</b></div>
+    <div class="g-score"><span>Lines</span><b id="lines">0</b></div>
+    <div class="g-score"><span>Level</span><b id="level">1</b></div>
+    <div class="g-score next"><span>Next</span><canvas id="next" width="48" height="32"></canvas></div>
+  </div>
+
+  <div class="g-stage" id="stage">
+    <canvas id="game" aria-label="Stonefall board"></canvas>
+    <div class="g-overlay" id="overlay">
+      <h2 id="ovTitle">Stonefall</h2>
+      <p id="ovText">Rune stones fall from the sky. Turn and slide them to fill complete rows, which then crumble away. Don't let the stack reach the top.</p>
+      <p class="touch-only">Use the buttons below. Tap the board to rotate.</p>
+      <p class="mouse-only">← → move · ↑ rotate · ↓ drop faster · Space drops instantly · P pauses</p>
+      <p id="bestLine"></p>
+      <button class="g-btn" id="startBtn">Play</button>
+    </div>
+  </div>
+
+  <div class="g-pad touch-only" style="grid-template-columns: repeat(5, 1fr); width: 100%; max-width: 380px;">
+    <button data-act="left" aria-label="Move left"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+    <button data-act="rotate" aria-label="Rotate"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button data-act="soft" aria-label="Drop faster"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button data-act="hard" aria-label="Drop instantly"><svg viewBox="0 0 24 24"><path d="m6 6 6 6 6-6"/><path d="m6 13 6 6 6-6"/></svg></button>
+    <button data-act="right" aria-label="Move right"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+const COLS = 10, ROWS = 20;
+const SHAPES = {
+  I: [[0, 1], [1, 1], [2, 1], [3, 1]], O: [[1, 0], [2, 0], [1, 1], [2, 1]], T: [[1, 0], [0, 1], [1, 1], [2, 1]],
+  S: [[1, 0], [2, 0], [0, 1], [1, 1]], Z: [[0, 0], [1, 0], [1, 1], [2, 1]], J: [[0, 0], [0, 1], [1, 1], [2, 1]], L: [[2, 0], [0, 1], [1, 1], [2, 1]]
+};
+const COLORS = { I: "#38bdf8", O: "#fbbf24", T: "#a78bfa", S: "#4ade80", Z: "#f87171", J: "#60a5fa", L: "#fb923c" };
+const canvas = $("game"), ctx = canvas.getContext("2d"), nctx = $("next").getContext("2d");
+let cell, board, piece, nextType, bag, score, lines, level, state = "ready", dropTimer, last, softDrop = false, flashRows = [];
+let best = store.get("ff-stonefall-best", 0);
+$("bestLine").textContent = best ? `Best score: ${best}` : "";
+
+function fit() {
+  const stage = $("stage").getBoundingClientRect();
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  cell = Math.floor(Math.min(stage.width / COLS, stage.height / ROWS));
+  canvas.style.width = cell * COLS + "px"; canvas.style.height = cell * ROWS + "px";
+  canvas.width = cell * COLS * dpr; canvas.height = cell * ROWS * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+addEventListener("resize", fit);
+
+// "Bag" randomiser: every 7 pieces contain one of each shape, so droughts don't happen.
+function takeType() {
+  if (!bag || !bag.length) { bag = Object.keys(SHAPES); for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; } }
+  return bag.pop();
+}
+function spawn() {
+  const type = nextType || takeType();
+  nextType = takeType();
+  piece = { type, cells: SHAPES[type].map(c => c.slice()), x: 3, y: type === "I" ? -1 : 0 };
+  drawNext();
+  if (collides(piece.cells, piece.x, piece.y)) gameOver();
+}
+function collides(cells, x, y) {
+  return cells.some(([cx, cy]) => {
+    const bx = cx + x, by = cy + y;
+    return bx < 0 || bx >= COLS || by >= ROWS || (by >= 0 && board[by][bx]);
+  });
+}
+function move(dx) {
+  if (state !== "play") return;
+  if (!collides(piece.cells, piece.x + dx, piece.y)) { piece.x += dx; draw(); }
+}
+function rotate() {
+  if (state !== "play" || piece.type === "O") return;
+  const size = piece.type === "I" ? 4 : 3;
+  const rotated = piece.cells.map(([x, y]) => [size - 1 - y, x]);
+  for (const kick of [0, -1, 1, -2, 2]) {          // simple wall kicks
+    if (!collides(rotated, piece.x + kick, piece.y)) { piece.cells = rotated; piece.x += kick; draw(); return; }
+  }
+  if (!collides(rotated, piece.x, piece.y - 1)) { piece.cells = rotated; piece.y -= 1; draw(); }
+}
+function fall() {
+  if (!collides(piece.cells, piece.x, piece.y + 1)) { piece.y++; if (softDrop) score += 1; return true; }
+  lock(); return false;
+}
+function hardDrop() {
+  if (state !== "play") return;
+  let n = 0;
+  while (!collides(piece.cells, piece.x, piece.y + 1)) { piece.y++; n++; }
+  score += n * 2;
+  lock();
+}
+function lock() {
+  for (const [cx, cy] of piece.cells) {
+    if (cy + piece.y < 0) return gameOver();
+    board[cy + piece.y][cx + piece.x] = piece.type;
+  }
+  const full = [];
+  board.forEach((row, y) => { if (row.every(Boolean)) full.push(y); });
+  if (full.length) {
+    flashRows = full; state = "clearing"; draw();
+    setTimeout(() => {
+      board = board.filter((_, y) => !full.includes(y));
+      while (board.length < ROWS) board.unshift(Array(COLS).fill(null));
+      lines += full.length;
+      score += [0, 100, 300, 500, 800][full.length] * level;
+      level = 1 + Math.floor(lines / 10);
+      flashRows = []; state = "play"; updateHud(); spawn(); draw();
+      last = performance.now(); requestAnimationFrame(loop);
+    }, 180);
+  } else {
+    spawn();
+  }
+  updateHud();
+}
+const gravityMs = () => Math.max(60, 800 * Math.pow(0.84, level - 1));
+
+function updateHud() { $("score").textContent = score; $("lines").textContent = lines; $("level").textContent = level; }
+
+function dark() { return matchMedia("(prefers-color-scheme: dark)").matches; }
+function block(c, x, y, s, color, alpha = 1) {
+  c.globalAlpha = alpha;
+  c.fillStyle = color; c.fillRect(x + 1, y + 1, s - 2, s - 2);
+  c.fillStyle = "rgba(255,255,255,0.25)"; c.fillRect(x + 1, y + 1, s - 2, Math.max(2, s * 0.15));
+  c.fillStyle = "rgba(0,0,0,0.18)"; c.fillRect(x + 1, y + s - 1 - Math.max(2, s * 0.12), s - 2, Math.max(2, s * 0.12));
+  c.globalAlpha = 1;
+}
+function draw() {
+  if (!board) return;
+  const s = cell, d = dark();
+  ctx.fillStyle = d ? "#1b1e22" : "#ffffff"; ctx.fillRect(0, 0, COLS * s, ROWS * s);
+  ctx.strokeStyle = d ? "#262a2f" : "#eef0f2"; ctx.lineWidth = 1;
+  for (let x = 1; x < COLS; x++) { ctx.beginPath(); ctx.moveTo(x * s + 0.5, 0); ctx.lineTo(x * s + 0.5, ROWS * s); ctx.stroke(); }
+  for (let y = 1; y < ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y * s + 0.5); ctx.lineTo(COLS * s, y * s + 0.5); ctx.stroke(); }
+  board.forEach((row, y) => row.forEach((t, x) => { if (t) block(ctx, x * s, y * s, s, flashRows.includes(y) ? "#ffffff" : COLORS[t]); }));
+  if (piece && state !== "over") {
+    let gy = piece.y;
+    while (!collides(piece.cells, piece.x, gy + 1)) gy++;
+    for (const [cx, cy] of piece.cells) if (cy + gy >= 0) block(ctx, (cx + piece.x) * s, (cy + gy) * s, s, COLORS[piece.type], 0.22); // ghost
+    for (const [cx, cy] of piece.cells) if (cy + piece.y >= 0) block(ctx, (cx + piece.x) * s, (cy + piece.y) * s, s, COLORS[piece.type]);
+  }
+}
+function drawNext() {
+  const s = 10, cells = SHAPES[nextType];
+  const w = Math.max(...cells.map(c => c[0])) + 1, h = Math.max(...cells.map(c => c[1])) - Math.min(...cells.map(c => c[1])) + 1, minY = Math.min(...cells.map(c => c[1]));
+  nctx.clearRect(0, 0, 48, 32);
+  for (const [x, y] of cells) block(nctx, (48 - w * s) / 2 + x * s, (32 - h * s) / 2 + (y - minY) * s, s, COLORS[nextType]);
+}
+
+function loop(t) {
+  if (state !== "play") return;
+  const interval = softDrop ? Math.min(45, gravityMs()) : gravityMs();
+  if (t - last >= interval) { last = t; fall(); updateHud(); }
+  draw();
+  if (state === "play") requestAnimationFrame(loop);
+}
+
+function start() {
+  board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  score = 0; lines = 0; level = 1; bag = null; nextType = null; flashRows = [];
+  updateHud(); spawn();
+  $("overlay").hidden = true;
+  state = "play"; last = performance.now();
+  requestAnimationFrame(loop);
+}
+function gameOver() {
+  state = "over";
+  if (score > best) { best = score; store.set("ff-stonefall-best", best); }
+  $("ovTitle").textContent = "The stones won";
+  $("ovText").textContent = `Score ${score} · ${lines} lines · level ${level}.`;
+  $("bestLine").textContent = score >= best && score > 0 ? "A new best score!" : `Best score: ${best}`;
+  $("startBtn").textContent = "Play again";
+  document.querySelectorAll("#overlay .touch-only, #overlay .mouse-only").forEach(e => e.hidden = true);
+  $("overlay").hidden = false;
+}
+function pause() {
+  if (state !== "play") return;
+  state = "paused";
+  $("ovTitle").textContent = "Paused"; $("ovText").textContent = "The stones will wait.";
+  $("bestLine").textContent = ""; $("startBtn").textContent = "Resume";
+  document.querySelectorAll("#overlay .touch-only, #overlay .mouse-only").forEach(e => e.hidden = true);
+  $("overlay").hidden = false;
+}
+function resume() { $("overlay").hidden = true; state = "play"; last = performance.now(); requestAnimationFrame(loop); }
+
+$("startBtn").onclick = () => state === "paused" ? resume() : start();
+$("pauseBtn").onclick = () => state === "paused" ? resume() : pause();
+
+// Keyboard
+addEventListener("keydown", e => {
+  const k = e.key;
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", " "].includes(k)) e.preventDefault();
+  if ((k === "Enter" || k === " ") && state !== "play" && state !== "clearing") { $("startBtn").click(); return; }
+  if (k === "ArrowLeft" || k === "a") move(-1);
+  else if (k === "ArrowRight" || k === "d") move(1);
+  else if (k === "ArrowUp" || k === "x" || k === "w") rotate();
+  else if (k === "ArrowDown" || k === "s") softDrop = true;
+  else if (k === " ") hardDrop();
+  else if (k === "p" || k === "P" || k === "Escape") state === "paused" ? resume() : pause();
+});
+addEventListener("keyup", e => { if (e.key === "ArrowDown" || e.key === "s") softDrop = false; });
+
+// Touch buttons, with hold-to-repeat for sideways moves
+document.querySelectorAll("[data-act]").forEach(b => {
+  let repeat;
+  b.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    const act = b.dataset.act;
+    if (act === "left" || act === "right") {
+      const dx = act === "left" ? -1 : 1;
+      move(dx);
+      repeat = setTimeout(function again() { move(dx); repeat = setTimeout(again, 55); }, 180);
+    } else if (act === "rotate") rotate();
+    else if (act === "soft") softDrop = true;
+    else if (act === "hard") hardDrop();
+  });
+  const stop = () => { clearTimeout(repeat); if (b.dataset.act === "soft") softDrop = false; };
+  b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop);
+});
+canvas.addEventListener("pointerdown", e => { e.preventDefault(); rotate(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+
+fit();
+</script>
+</body>
+</html>

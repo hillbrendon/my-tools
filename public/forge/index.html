@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Forge · Fenrir Forge</title>
+<meta name="description" content="Forge: slide and merge matching tiles to forge your way to 2048. Free classic number puzzle.">
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../games.css">
+<style>
+  .board {
+    --size: min(100%, calc(100svh - 260px), 460px);
+    position: relative; width: var(--size); aspect-ratio: 1; touch-action: none;
+    background: #3a3f45; border-radius: 12px; padding: 2.4%;
+  }
+  .cells, .tiles { position: absolute; inset: 2.4%; }
+  .cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3.2%; }
+  .cells div { background: rgba(255,255,255,0.08); border-radius: 8px; }
+  .tile {
+    position: absolute; width: 22.6%; height: 22.6%; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-variant-numeric: tabular-nums; container-type: inline-size;
+    transition: transform 0.12s ease-in-out;
+  }
+  .tile span { font-size: 42cqw; line-height: 1; }
+  .tile.big span { font-size: 32cqw; }
+  .tile.huge span { font-size: 25cqw; }
+  .tile.new { animation: appear 0.18s ease 0.1s backwards; }
+  .tile.merged { animation: merge 0.2s ease 0.1s; }
+  @keyframes appear { from { opacity: 0; scale: 0.4; } }
+  @keyframes merge { 50% { scale: 1.15; } }
+  .bar { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+  .bar button {
+    font: inherit; font-weight: 600; font-size: 0.9rem; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  }
+  .bar button:disabled { opacity: 0.4; cursor: default; }
+  .g-overlay { inset: 0; }
+  .g-stage { flex: none; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <div class="g-head">
+    <a class="back" href="../">&larr; Fenrir Forge</a>
+    <h1>Forge</h1>
+    <div class="spacer"></div>
+  </div>
+  <div class="g-scores">
+    <div class="g-score"><span>Score</span><b id="score">0</b></div>
+    <div class="g-score"><span>Best</span><b id="best">0</b></div>
+  </div>
+
+  <div class="g-stage">
+    <div class="board" id="board">
+      <div class="cells"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+      <div class="tiles" id="tiles"></div>
+      <div class="g-overlay" id="overlay" hidden>
+        <h2 id="ovTitle"></h2>
+        <p id="ovText"></p>
+        <button class="g-btn" id="ovBtn"></button>
+      </div>
+    </div>
+  </div>
+  <div class="bar">
+    <button id="undoBtn">Undo</button>
+    <button id="newBtn">New game</button>
+  </div>
+  <p class="g-hint"><span class="touch-only">Swipe to slide every tile. Matching numbers fuse into one.</span><span class="mouse-only">Arrow keys or WASD slide every tile. Matching numbers fuse into one. Reach 2048!</span></p>
+
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+// Cool steel through glowing ember to molten gold as the numbers grow.
+const PALETTE = {
+  2: ["#e5e7eb", "#1f2328"], 4: ["#cbd5e1", "#1f2328"], 8: ["#fdba74", "#431407"], 16: ["#fb923c", "#fff"],
+  32: ["#f97316", "#fff"], 64: ["#ea580c", "#fff"], 128: ["#fcd34d", "#451a03"], 256: ["#fbbf24", "#451a03"],
+  512: ["#f59e0b", "#fff"], 1024: ["#d97706", "#fff"], 2048: ["#b45309", "#fff"]
+};
+let grid, score, best = store.get("ff-forge-best", 0), won, history = [], nextId = 1;
+$("best").textContent = best;
+
+function empty() { return Array.from({ length: 4 }, () => Array(4).fill(null)); }
+function addTile() {
+  const free = [];
+  grid.forEach((row, r) => row.forEach((t, c) => { if (!t) free.push([r, c]); }));
+  if (!free.length) return;
+  const [r, c] = free[Math.floor(Math.random() * free.length)];
+  grid[r][c] = { id: nextId++, v: Math.random() < 0.9 ? 2 : 4, isNew: true };
+}
+function save() { store.set("ff-forge-game", { grid, score, won, nextId }); }
+
+function newGame() {
+  grid = empty(); score = 0; won = false; history = [];
+  addTile(); addTile();
+  $("overlay").hidden = true;
+  save(); render();
+}
+
+// Slides the board in one direction. Each tile merges at most once per move.
+function slide(dir) {
+  if (!$("overlay").hidden) return;
+  const before = JSON.stringify(grid.map(r => r.map(t => t && t.v)));
+  const snapshot = { grid: JSON.parse(JSON.stringify(grid)), score };
+  const vec = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] }[dir];
+  const order = [0, 1, 2, 3];
+  const rows = vec[0] === 1 ? [...order].reverse() : order, cols = vec[1] === 1 ? [...order].reverse() : order;
+  grid.forEach(row => row.forEach(t => { if (t) { t.isNew = false; t.merged = false; } }));
+  for (const r of rows) for (const c of cols) {
+    const t = grid[r][c];
+    if (!t) continue;
+    let nr = r, nc = c;
+    while (true) {
+      const tr = nr + vec[0], tc = nc + vec[1];
+      if (tr < 0 || tr > 3 || tc < 0 || tc > 3) break;
+      const other = grid[tr][tc];
+      if (!other) { nr = tr; nc = tc; continue; }
+      if (other.v === t.v && !other.merged) {
+        other.v *= 2; other.merged = true; score += other.v;
+        grid[r][c] = null;
+        if (other.v === 2048 && !won) { won = true; setTimeout(() => overlay("Forged!", "You made the 2048 tile. Keep going for an even bigger one?", "Keep forging"), 300); }
+        nr = null;
+      }
+      break;
+    }
+    if (nr !== null && (nr !== r || nc !== c)) { grid[nr][nc] = t; grid[r][c] = null; }
+  }
+  if (JSON.stringify(grid.map(r => r.map(t => t && t.v))) === before) return;
+  history = [snapshot];
+  addTile();
+  if (score > best) { best = score; store.set("ff-forge-best", best); }
+  save(); render();
+  if (!canMove()) setTimeout(() => overlay("The forge cools", `No moves left. Final score: ${score}.`, "New game"), 300);
+}
+function canMove() {
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    const t = grid[r][c];
+    if (!t) return true;
+    if (c < 3 && grid[r][c + 1] && grid[r][c + 1].v === t.v) return true;
+    if (r < 3 && grid[r + 1][c] && grid[r + 1][c].v === t.v) return true;
+  }
+  return false;
+}
+function overlay(title, text, btn) {
+  $("ovTitle").textContent = title; $("ovText").textContent = text; $("ovBtn").textContent = btn;
+  $("overlay").hidden = false;
+}
+
+// Tiles are kept as DOM elements keyed by id, so moves animate smoothly.
+const tileEls = new Map();
+function render() {
+  const seen = new Set();
+  grid.forEach((row, r) => row.forEach((t, c) => {
+    if (!t) return;
+    seen.add(t.id);
+    let el = tileEls.get(t.id);
+    if (!el) { el = document.createElement("div"); el.append(document.createElement("span")); $("tiles").append(el); tileEls.set(t.id, el); }
+    const [bg, fg] = PALETTE[t.v] || ["#78350f", "#fff"];
+    el.className = "tile" + (t.isNew ? " new" : "") + (t.merged ? " merged" : "") + (t.v >= 1024 ? " huge" : t.v >= 128 ? " big" : "");
+    el.style.background = bg; el.style.color = fg;
+    const step = (22.6 + 3.2) / 22.6 * 100; // one cell plus the gap, as a % of the tile's own size
+    el.style.transform = `translate(${c * step}%, ${r * step}%)`;
+    el.firstChild.textContent = t.v;
+  }));
+  for (const [id, el] of tileEls) if (!seen.has(id)) { el.remove(); tileEls.delete(id); }
+  $("score").textContent = score; $("best").textContent = best;
+  $("undoBtn").disabled = !history.length;
+}
+
+$("undoBtn").onclick = () => {
+  const h = history.pop();
+  if (!h) return;
+  grid = h.grid; score = h.score; $("overlay").hidden = true;
+  tileEls.forEach(el => el.remove()); tileEls.clear();
+  save(); render();
+};
+$("newBtn").onclick = () => { if (score === 0 || confirm("Start a new game?")) newGame(); };
+$("ovBtn").onclick = () => { if (canMove() && won && $("ovBtn").textContent === "Keep forging") $("overlay").hidden = true; else newGame(); };
+
+const KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", a: "left", d: "right", w: "up", s: "down" };
+addEventListener("keydown", e => { if (KEYS[e.key]) { e.preventDefault(); slide(KEYS[e.key]); } });
+let start = null;
+$("board").addEventListener("pointerdown", e => { start = [e.clientX, e.clientY]; });
+addEventListener("pointerup", e => {
+  if (!start) return;
+  const dx = e.clientX - start[0], dy = e.clientY - start[1];
+  start = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+  slide(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+});
+
+const saved = store.get("ff-forge-game", null);
+if (saved && saved.grid) { grid = saved.grid; score = saved.score; won = saved.won; nextId = saved.nextId || 1000; render(); if (!canMove()) overlay("The forge cools", `No moves left. Final score: ${score}.`, "New game"); }
+else newGame();
+</script>
+</body>
+</html>

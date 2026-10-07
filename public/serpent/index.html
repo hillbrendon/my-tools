@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Serpent · Fenrir Forge</title>
+<meta name="description" content="Serpent: guide the world serpent, eat the runes and grow longer without biting your own tail. Free classic snake game.">
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="../games.css">
+</head>
+<body>
+  <div class="g-head">
+    <a class="back" href="../">&larr; Fenrir Forge</a>
+    <h1>Serpent</h1>
+    <div class="spacer"><button class="icon-btn" id="pauseBtn" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></button></div>
+  </div>
+  <div class="g-scores">
+    <div class="g-score"><span>Score</span><b id="score">0</b></div>
+    <div class="g-score"><span>Best</span><b id="best">0</b></div>
+  </div>
+
+  <div class="g-stage" id="stage">
+    <canvas id="game" aria-label="Serpent game board"></canvas>
+    <div class="g-overlay" id="overlay">
+      <h2 id="ovTitle">Serpent</h2>
+      <p id="ovText">You are Jörmungandr, the world serpent. Eat the glowing runes to grow, and don't bite your own tail or hit the walls.</p>
+      <p class="touch-only">Swipe on the board or use the arrows below.</p>
+      <p class="mouse-only">Use the arrow keys or WASD. P pauses.</p>
+      <button class="g-btn" id="startBtn">Play</button>
+    </div>
+  </div>
+
+  <div class="g-pad touch-only" id="pad" style="grid-template-columns: repeat(3, 64px);">
+    <span></span><button data-dir="up" aria-label="Up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button><span></span>
+    <button data-dir="left" aria-label="Left"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>
+    <button data-dir="down" aria-label="Down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+    <button data-dir="right" aria-label="Right"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+const N = 18;                         // board is N x N cells
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const canvas = $("game"), ctx = canvas.getContext("2d");
+let cell, snake, dir, queue, food, bonus, score, state = "ready", timer = 0, last = 0, eaten;
+let best = store.get("ff-serpent-best", 0);
+$("best").textContent = best;
+
+function colors() {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  return dark
+    ? { bg: "#1b1e22", grid: "#22262b", body: "#fb923c", body2: "#ea580c", head: "#fdba74", food: "#60a5fa", bonus: "#fde68a", eye: "#1b1e22" }
+    : { bg: "#ffffff", grid: "#f1f3f5", body: "#ea580c", body2: "#c2410c", head: "#9a3412", food: "#2f6f9f", bonus: "#d97706", eye: "#ffffff" };
+}
+
+function fit() {
+  const stage = $("stage").getBoundingClientRect();
+  const size = Math.floor(Math.min(stage.width, stage.height) / N) * N;
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  cell = size / N;
+  canvas.style.width = canvas.style.height = size + "px";
+  canvas.width = canvas.height = size * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+addEventListener("resize", fit);
+
+function reset() {
+  const m = Math.floor(N / 2);
+  snake = [[m, m], [m - 1, m], [m - 2, m]];
+  dir = "right"; queue = []; score = 0; eaten = 0; bonus = null;
+  placeFood();
+  $("score").textContent = 0;
+}
+function freeCell() {
+  let x, y;
+  do { x = Math.floor(Math.random() * N); y = Math.floor(Math.random() * N); }
+  while (snake.some(s => s[0] === x && s[1] === y) || (food && food[0] === x && food[1] === y));
+  return [x, y];
+}
+function placeFood() { food = freeCell(); }
+
+// Speeds up as the serpent grows: 150ms per move, down to 65ms.
+const stepMs = () => Math.max(65, 150 - eaten * 3);
+
+function step() {
+  if (queue.length) {
+    const next = queue.shift();
+    const [dx, dy] = DIRS[next], [cx, cy] = DIRS[dir];
+    if (dx !== -cx || dy !== -cy) dir = next;
+  }
+  const [dx, dy] = DIRS[dir];
+  const head = [snake[0][0] + dx, snake[0][1] + dy];
+  const growing = head[0] === food[0] && head[1] === food[1];
+  const body = growing ? snake : snake.slice(0, -1);
+  if (head[0] < 0 || head[1] < 0 || head[0] >= N || head[1] >= N || body.some(s => s[0] === head[0] && s[1] === head[1])) return gameOver();
+  snake.unshift(head);
+  if (growing) {
+    eaten++; score += 1;
+    placeFood();
+    if (!bonus && eaten % 5 === 0) bonus = { pos: freeCell(), until: performance.now() + 6000 };
+  } else {
+    snake.pop();
+  }
+  if (bonus && head[0] === bonus.pos[0] && head[1] === bonus.pos[1]) { score += 5; bonus = null; }
+  if (bonus && performance.now() > bonus.until) bonus = null;
+  $("score").textContent = score;
+}
+
+function draw() {
+  if (!snake) return;
+  const c = colors(), s = cell;
+  ctx.fillStyle = c.bg; ctx.fillRect(0, 0, N * s, N * s);
+  ctx.fillStyle = c.grid;
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if ((x + y) % 2) ctx.fillRect(x * s, y * s, s, s);
+
+  // Rune food: a diamond
+  const diamond = (x, y, color, scale) => {
+    const cx = x * s + s / 2, cy = y * s + s / 2, r = s * 0.36 * scale;
+    ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r * 0.75, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r * 0.75, cy); ctx.closePath(); ctx.fill();
+  };
+  diamond(food[0], food[1], c.food, 1);
+  if (bonus) diamond(bonus.pos[0], bonus.pos[1], c.bonus, 1.1 + 0.1 * Math.sin(performance.now() / 120));
+
+  snake.forEach(([x, y], i) => {
+    ctx.fillStyle = i === 0 ? c.head : i % 2 ? c.body : c.body2;
+    const pad = i === 0 ? 1 : 2;
+    ctx.beginPath(); ctx.roundRect(x * s + pad, y * s + pad, s - pad * 2, s - pad * 2, s * 0.3); ctx.fill();
+  });
+  // Eyes on the head, facing the direction of travel
+  const [hx, hy] = snake[0], [dx, dy] = DIRS[dir];
+  ctx.fillStyle = c.eye;
+  for (const side of [-1, 1]) {
+    const ex = hx * s + s / 2 + dx * s * 0.18 + dy * side * s * 0.2;
+    const ey = hy * s + s / 2 + dy * s * 0.18 - dx * side * s * 0.2;
+    ctx.beginPath(); ctx.arc(ex, ey, s * 0.09, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function loop(t) {
+  if (state !== "play") return;
+  timer += t - last; last = t;
+  while (timer >= stepMs() && state === "play") { timer -= stepMs(); step(); }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function start() {
+  reset();
+  $("overlay").hidden = true;
+  state = "play"; timer = 0; last = performance.now();
+  requestAnimationFrame(loop);
+}
+function gameOver() {
+  state = "over";
+  if (score > best) { best = score; store.set("ff-serpent-best", best); $("best").textContent = best; }
+  $("ovTitle").textContent = "Game over";
+  $("ovText").textContent = `Score ${score}. ${score >= best && score > 0 ? "A new best!" : `Best: ${best}.`}`;
+  $("startBtn").textContent = "Play again";
+  document.querySelectorAll("#overlay .touch-only, #overlay .mouse-only").forEach(e => e.hidden = true);
+  $("overlay").hidden = false;
+}
+function pause() {
+  if (state === "play") {
+    state = "paused";
+    $("ovTitle").textContent = "Paused"; $("ovText").textContent = "Take a breath.";
+    $("startBtn").textContent = "Resume";
+    document.querySelectorAll("#overlay .touch-only, #overlay .mouse-only").forEach(e => e.hidden = true);
+    $("overlay").hidden = false;
+  }
+}
+function resume() { $("overlay").hidden = true; state = "play"; last = performance.now(); requestAnimationFrame(loop); }
+
+function turn(d) {
+  if (state === "ready" || state === "over") return;
+  if (queue.length < 3) queue.push(d);
+}
+
+$("startBtn").onclick = () => state === "paused" ? resume() : start();
+$("pauseBtn").onclick = () => state === "paused" ? resume() : pause();
+document.querySelectorAll("[data-dir]").forEach(b => b.addEventListener("pointerdown", e => { e.preventDefault(); turn(b.dataset.dir); }));
+const KEYS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", w: "up", s: "down", a: "left", d: "right" };
+addEventListener("keydown", e => {
+  if (KEYS[e.key]) { e.preventDefault(); turn(KEYS[e.key]); }
+  else if (e.key === "p" || e.key === "P" || e.key === "Escape") state === "paused" ? resume() : pause();
+  else if ((e.key === "Enter" || e.key === " ") && state !== "play") { e.preventDefault(); $("startBtn").click(); }
+});
+// Swipe anywhere on the board
+let touchStart = null;
+canvas.addEventListener("pointerdown", e => { touchStart = [e.clientX, e.clientY]; });
+canvas.addEventListener("pointermove", e => {
+  if (!touchStart) return;
+  const dx = e.clientX - touchStart[0], dy = e.clientY - touchStart[1];
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+  turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+  touchStart = [e.clientX, e.clientY];
+});
+addEventListener("pointerup", () => touchStart = null);
+document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+
+reset(); fit();
+</script>
+</body>
+</html>

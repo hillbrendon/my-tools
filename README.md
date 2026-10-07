@@ -31,6 +31,14 @@ repo's **Actions** tab → **Update calculator data** → **Run workflow**):
   `python scripts/build_runes_definitions.py` (definitions from WordNet, Princeton University).
   1,773 answers last until about August 2031, after which they repeat.
 
+- **Skald** (`public/skald/`): levelled word game. `python scripts/build_skald_levels.py` builds 400 levels
+  from SCOWL; add words to its `EXCLUDE` list to keep them out.
+- **Pack Surge** (`public/pack-surge/`): crowd battle; levels are generated from the level number in
+  `levelConfig()`.
+- **Arcade classics**: Serpent, Stonefall, Shieldbreaker and Forge share `public/games.css`.
+
+All games save progress and best scores in the player's browser (localStorage) only.
+
 ## One-time setup
 
 1. Create an empty **private or public** repo on GitHub named `my-tools` (no README).
