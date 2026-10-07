@@ -138,13 +138,15 @@
   <dialog id="helpDialog">
     <button class="icon-btn close" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     <h2>How to play</h2>
-    <p>Find the hidden five-letter word in six tries. After each guess the rune stones change colour:</p>
+    <p>Find the hidden five-letter word in six tries.</p>
+    <p><b>To start, type any real five-letter word</b> (for example STARE or CRANE) and press Enter. There are no clues before your first guess. After each guess the rune stones change colour to show how close you are:</p>
     <div class="example"><div class="tile correct">w</div><div class="tile">o</div><div class="tile">l</div><div class="tile">v</div><div class="tile">e</div></div>
     <p><b>Ember</b>: the letter is in the word and in the right spot.</p>
     <div class="example"><div class="tile">p</div><div class="tile present">r</div><div class="tile">o</div><div class="tile">u</div><div class="tile">d</div></div>
     <p><b>Blue</b>: the letter is in the word but in a different spot.</p>
     <div class="example"><div class="tile">s</div><div class="tile">t</div><div class="tile absent">o</div><div class="tile">n</div><div class="tile">e</div></div>
     <p><b>Grey</b>: the letter isn't in the word.</p>
+    <p>Use the clues for your next guess: keep ember letters in place, move blue letters to a new spot, and avoid grey ones. The keyboard is coloured the same way.</p>
     <ul>
       <li><b>Daily</b> is the same word for everyone, with a new one at midnight. Share your result without spoiling the answer.</li>
       <li><b>Practice</b> gives you unlimited random words.</li>
@@ -281,9 +283,11 @@ function renderAll() {
   }
   $("dailyBtn").classList.toggle("active", mode === "daily");
   $("practiceBtn").classList.toggle("active", mode === "practice");
-  $("subtitle").textContent = mode === "daily"
-    ? `Daily Runes #${dayNumber(game.dateKey)}` + (game.done ? (game.won ? " · Solved ✓" : " · Better luck tomorrow") : "")
-    : "Practice · unlimited words";
+  $("subtitle").textContent = !game.guesses.length
+    ? "Type any five-letter word, then press Enter"
+    : mode === "daily"
+      ? `Daily Runes #${dayNumber(game.dateKey)}` + (game.done ? (game.won ? " · Solved ✓" : " · Better luck tomorrow") : "")
+      : "Practice · unlimited words";
 }
 
 function renderCurrentRow() {
