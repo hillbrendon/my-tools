@@ -25,6 +25,29 @@
     padding: 24px 16px 60px;
   }
   .wrap { max-width: 920px; margin: 0 auto; }
+
+  /* Guide: a sticky sidebar on wide screens, a collapsible panel above the calculator on narrow ones */
+  .layout { display: flex; flex-direction: column; gap: 20px; }
+  .guide {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 0.86rem;
+    line-height: 1.5;
+  }
+  .guide summary { font-weight: 600; cursor: pointer; color: var(--accent); }
+  .guide h3 { font-size: 0.88rem; margin: 16px 0 4px; }
+  .guide p { margin: 0 0 6px; }
+  .guide ul { margin: 0 0 6px; padding-left: 18px; }
+  .guide li { margin-bottom: 4px; }
+  @media (min-width: 1180px) {
+    .wrap { max-width: 1240px; }
+    .layout { flex-direction: row-reverse; align-items: flex-start; }
+    .layout > .grid { flex: 1; min-width: 0; }
+    .guide-wrap { width: 300px; flex-shrink: 0; position: sticky; top: 16px; }
+    .guide { max-height: calc(100vh - 32px); overflow-y: auto; }
+  }
   .back { font-size: 0.85rem; color: var(--accent); text-decoration: none; }
   .back:hover { text-decoration: underline; }
   h1 { font-size: 1.4rem; margin-bottom: 2px; }
@@ -123,6 +146,48 @@
   <a class="back" href="../">&larr; All tools</a>
   <h1>Mortgage Reduction Calculator</h1>
   <div class="sub">Estimate a new mortgage after selling and buying, including selling costs, stamp duty and a savings buffer.</div>
+
+  <div class="layout">
+  <aside class="guide-wrap">
+    <details class="guide" id="guide" open>
+      <summary>How to use this calculator</summary>
+
+      <h3>What it does</h3>
+      <p>Works out what your new mortgage would be if you sell your current home and buy another. It subtracts your selling costs and current loan from the sale price, then adds the new home's price, stamp duty and fees.</p>
+
+      <h3>1. Pick what to solve for</h3>
+      <ul>
+        <li><b>New mortgage:</b> you know both prices.</li>
+        <li><b>Sale price needed:</b> you know the mortgage you want and the price of the home you're buying.</li>
+        <li><b>Purchase budget:</b> you know your likely sale price and the mortgage you want.</li>
+      </ul>
+      <p>For the last two, set your target as a loan amount, or as the repayment you can afford and let the calculator work out the loan.</p>
+
+      <h3>2. Selling</h3>
+      <p>Enter the expected sale price, your agent's commission and fees, and the amount needed to pay off your current mortgage. Your lender can give you an exact payout figure.</p>
+
+      <h3>3. Buying</h3>
+      <p>Enter the purchase price and pick the state. Stamp duty is worked out automatically. Use the savings buffer for money you want to keep in the bank after settlement.</p>
+
+      <h3>4. New mortgage</h3>
+      <p>The interest rate starts at the Reserve Bank's latest average for new home loans. Replace it with a quote from your lender to get accurate repayments.</p>
+
+      <h3>Where the numbers come from</h3>
+      <ul>
+        <li><b>Stamp duty:</b> rates for buying a home you'll live in, checked against each state revenue office every month. Victoria and Queensland include their home buyer concessions.</li>
+        <li><b>Interest rate:</b> the RBA's average for new owner-occupier loans, updated monthly.</li>
+      </ul>
+
+      <h3>First home buyers</h3>
+      <p>Not covered, and not needed. This calculator assumes you're selling a home you own, and in NSW, VIC and QLD you're only a first home buyer if you've never owned a home in Australia.</p>
+
+      <h3>Not included</h3>
+      <p>Lenders mortgage insurance, bridging finance, lender application fees, moving costs, and council or water rate adjustments at settlement. Add any you expect to "Other selling costs" or "Legal / conveyancing fees".</p>
+
+      <h3>Your privacy</h3>
+      <p>Everything is calculated in your browser. Nothing you enter is saved or sent anywhere.</p>
+    </details>
+  </aside>
 
   <div class="grid">
     <div class="card results" style="margin-bottom:-4px;">
@@ -274,6 +339,7 @@
       </div>
     </div>
   </div>
+  </div>
 </div>
 
 <script>
@@ -284,48 +350,18 @@ function fmt(n) {
   return neg ? "-" + s : s;
 }
 
-// Owner-occupier stamp duty estimators, checked against each revenue office on 7 Oct 2026.
-// No first-home concessions or foreign buyer surcharges. Update when the official rates change.
-const DUTY_SOURCES = {
-  NSW: { asAt: "2026–27 rates (from 1 July 2026)", url: "https://www.revenue.nsw.gov.au/taxes-duties-levies-royalties/transfer-duty/understanding-transfer-duty/calculate-transfer-duty", name: "Revenue NSW" },
-  VIC: { asAt: "rates for contracts from 1 July 2021, incl. principal place of residence concession", url: "https://www.sro.vic.gov.au/about-us/rates-and-statistics/current-rates", name: "State Revenue Office Victoria" },
-  QLD: { asAt: "home concession rates", url: "https://qro.qld.gov.au/duties/transfer-duty/calculate/concession-rates/", name: "Queensland Revenue Office" }
-};
-
-// NSW general transfer duty plus premium duty, 1 July 2026 – 30 June 2027 (thresholds are CPI-indexed each July)
-function stampDutyNSW(price) {
-  if (price <= 18000) return Math.max(price * 0.0125, 20);
-  if (price <= 38000) return 225 + (price - 18000) * 0.015;
-  if (price <= 103000) return 525 + (price - 38000) * 0.0175;
-  if (price <= 387000) return 1662 + (price - 103000) * 0.035;
-  if (price <= 1290000) return 11602 + (price - 387000) * 0.045;
-  if (price <= 3870000) return 52237 + (price - 1290000) * 0.055;
-  return 194137 + (price - 3870000) * 0.07;
-}
-// VIC general rates, with the principal place of residence (PPR) concession between $130,000 and $550,000
-function stampDutyVIC(price) {
-  if (price <= 25000) return price * 0.014;
-  if (price <= 130000) return 350 + (price - 25000) * 0.024;
-  if (price <= 440000) return 2870 + (price - 130000) * 0.05;   // PPR concession
-  if (price <= 550000) return 18370 + (price - 440000) * 0.06;  // PPR concession
-  if (price <= 960000) return 2870 + (price - 130000) * 0.06;
-  if (price <= 2000000) return price * 0.055;
-  return 110000 + (price - 2000000) * 0.065;
-}
-// QLD home concession rates (buying a home you will live in)
-function stampDutyQLD(price) {
-  if (price <= 350000) return price * 0.01;
-  if (price <= 540000) return 3500 + (price - 350000) * 0.035;
-  if (price <= 1000000) return 10150 + (price - 540000) * 0.045;
-  return 30850 + (price - 1000000) * 0.0575;
-}
+// Owner-occupier stamp duty rates, loaded from stamp-duty.json. That file is refreshed monthly
+// from each state revenue office by scripts/update_stamp_duty.py (no first-home concessions or
+// foreign buyer surcharges). Each bracket: duty = base + rate × (price − over), at least min.
+let dutyData = null;
+let dutyLoadFailed = false;
 
 function dutyFor(price, state, dutyOverride) {
   if (dutyOverride > 0) return dutyOverride;
-  if (state === "NSW") return stampDutyNSW(price);
-  if (state === "VIC") return stampDutyVIC(price);
-  if (state === "QLD") return stampDutyQLD(price);
-  return 0;
+  const s = dutyData && dutyData.states[state];
+  if (!s) return 0;
+  const b = s.brackets.find(b => b.upTo === null || price <= b.upTo);
+  return Math.max(b.base + b.rate * Math.max(price - b.over, 0), b.min || 0);
 }
 
 // Finds the purchase price P such that P + duty(P) = targetSum, via binary search
@@ -478,7 +514,7 @@ function calc() {
     document.getElementById('headlineRange').textContent = mode === "forward" ? "Based on the figures entered above" : "Sale/purchase price to hit your target mortgage & buffer";
   }
 
-  const src = DUTY_SOURCES[state];
+  const src = dutyData && dutyData.states[state];
   const dutySource = document.getElementById('dutySource');
   dutySource.replaceChildren();
   if (src) {
@@ -487,12 +523,18 @@ function calc() {
     link.target = '_blank';
     link.rel = 'noopener';
     link.textContent = src.name;
-    dutySource.append("Source: ", link, " — " + src.asAt + ".");
+    const checked = new Date(dutyData.checked).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+    dutySource.append("Source: ", link, " (" + src.basis + "). Last checked " + checked + ".");
   }
 
   if (state === "OTHER" && dutyOverride === 0) {
     warningNote.style.display = 'block';
     warningNote.textContent = "No stamp duty estimate is available for the selected state — enter a manual figure above for an accurate result.";
+  } else if (state !== "OTHER" && dutyOverride === 0 && !dutyData) {
+    warningNote.style.display = 'block';
+    warningNote.textContent = dutyLoadFailed
+      ? "Stamp duty rates couldn't be loaded. Refresh the page, or enter a manual stamp duty figure above."
+      : "Loading stamp duty rates…";
   }
 }
 
@@ -544,6 +586,15 @@ bufferNum.addEventListener('input', () => { bufferSlider.value = bufferNum.value
 bufferSlider.addEventListener('input', () => { bufferNum.value = bufferSlider.value; calc(); });
 
 applyModeUI();
+
+// Start the guide collapsed on narrow screens so the calculator is visible first.
+if (!window.matchMedia('(min-width: 1180px)').matches) document.getElementById('guide').open = false;
+
+fetch('stamp-duty.json', { cache: 'no-cache' })
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(data => { dutyData = data; })
+  .catch(() => { dutyLoadFailed = true; })
+  .finally(calc);
 
 // Pre-fill the interest rate with the RBA's latest average, saved monthly into rates.json.
 // If it can't be loaded, the default rate above is kept.

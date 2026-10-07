@@ -1,0 +1,135 @@
+{
+  "checked": "2026-10-07",
+  "states": {
+    "NSW": {
+      "name": "Revenue NSW",
+      "url": "https://www.revenue.nsw.gov.au/taxes-duties-levies-royalties/transfer-duty/understanding-transfer-duty/calculate-transfer-duty",
+      "basis": "general transfer duty and premium duty",
+      "brackets": [
+        {
+          "upTo": 18000.0,
+          "base": 0,
+          "rate": 0.0125,
+          "over": 0,
+          "min": 20.0
+        },
+        {
+          "upTo": 38000.0,
+          "base": 225.0,
+          "rate": 0.015,
+          "over": 18000.0
+        },
+        {
+          "upTo": 103000.0,
+          "base": 525.0,
+          "rate": 0.0175,
+          "over": 38000.0
+        },
+        {
+          "upTo": 387000.0,
+          "base": 1662.0,
+          "rate": 0.035,
+          "over": 103000.0
+        },
+        {
+          "upTo": 1290000.0,
+          "base": 11602.0,
+          "rate": 0.045,
+          "over": 387000.0
+        },
+        {
+          "upTo": 3870000.0,
+          "base": 52237.0,
+          "rate": 0.055,
+          "over": 1290000.0
+        },
+        {
+          "upTo": null,
+          "base": 194137.0,
+          "rate": 0.07,
+          "over": 3870000.0
+        }
+      ]
+    },
+    "VIC": {
+      "name": "State Revenue Office Victoria",
+      "url": "https://www.sro.vic.gov.au/about-us/rates-and-statistics/current-rates/land-transfer-duty-principal-place-residence-current-rates",
+      "basis": "general rates with the principal place of residence concession",
+      "brackets": [
+        {
+          "upTo": 25000.0,
+          "base": 0,
+          "rate": 0.014,
+          "over": 0
+        },
+        {
+          "upTo": 130000.0,
+          "base": 350.0,
+          "rate": 0.024,
+          "over": 25000.0
+        },
+        {
+          "upTo": 440000.0,
+          "base": 2870.0,
+          "rate": 0.05,
+          "over": 130000.0
+        },
+        {
+          "upTo": 550000.0,
+          "base": 18370.0,
+          "rate": 0.06,
+          "over": 440000.0
+        },
+        {
+          "upTo": 960000.0,
+          "base": 2870.0,
+          "rate": 0.06,
+          "over": 130000.0
+        },
+        {
+          "upTo": 2000000.0,
+          "base": 0,
+          "rate": 0.055,
+          "over": 0
+        },
+        {
+          "upTo": null,
+          "base": 110000.0,
+          "rate": 0.065,
+          "over": 2000000.0
+        }
+      ]
+    },
+    "QLD": {
+      "name": "Queensland Revenue Office",
+      "url": "https://qro.qld.gov.au/duties/transfer-duty/calculate/concession-rates/",
+      "basis": "home concession rates",
+      "brackets": [
+        {
+          "upTo": 350000.0,
+          "base": 0,
+          "rate": 0.01,
+          "over": 0
+        },
+        {
+          "upTo": 540000.0,
+          "base": 3500.0,
+          "rate": 0.035,
+          "over": 350000.0
+        },
+        {
+          "upTo": 1000000.0,
+          "base": 10150.0,
+          "rate": 0.045,
+          "over": 540000.0
+        },
+        {
+          "upTo": null,
+          "base": 30850.0,
+          "rate": 0.0575,
+          "over": 1000000.0
+        }
+      ]
+    }
+  }
+}
