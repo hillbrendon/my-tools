@@ -44,6 +44,14 @@ kiwis delis menus gurus saris lymph karat gimme nappy hippy psych crack opium
 """.split())
 
 
+# Words removed after Runes launched. Applied after the shuffle so the order of every other
+# answer (and therefore past daily words) stays the same. Add to this list, not EXCLUDE, from now on.
+RETIRE = set("""
+among could doing shall since their these those until where which whose would ought circa media
+pence pries suing redid undid vying
+""".split())
+
+
 def fetch(url):
     req = urllib.request.Request(url, headers={"User-Agent": "fenrir-forge word list builder"})
     with urllib.request.urlopen(req, timeout=120) as r:
@@ -86,6 +94,7 @@ def main():
     answers = sorted((w for w in common if not inflected(w) and w not in bad and w not in EXCLUDE), key=lambda w: rank.get(w, 10**9))
     answers = answers[:MAX_ANSWERS]
     random.Random(20261007).shuffle(answers)
+    answers = [w for w in answers if w not in RETIRE]
     accepted = sorted(accepted | set(answers))
 
     encoded = base64.b64encode("".join(answers).encode()).decode()

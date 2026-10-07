@@ -94,6 +94,14 @@
   .close { position: absolute; top: 10px; right: 10px; }
   .example { display: flex; gap: 4px; margin: 6px 0 2px; }
   .example .tile { --tile: 36px; width: 36px; height: 36px; font-size: 1.1rem; }
+  .definition {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; margin: -4px 0 16px; font-size: 0.88rem;
+  }
+  .definition em { color: var(--muted); font-size: 0.8rem; }
+  .definition ol { margin: 4px 0 0; padding-left: 20px; }
+  .definition li { margin: 2px 0; }
+  .definition small { display: block; margin-top: 6px; color: var(--muted); font-size: 0.7rem; }
   .stat-row { display: flex; justify-content: space-around; text-align: center; margin: 8px 0 16px; }
   .stat-row b { display: block; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
   .stat-row span { font-size: 0.72rem; color: var(--muted); }
@@ -159,6 +167,7 @@
     <button class="icon-btn close" data-close aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     <h2 id="statsTitle">Statistics</h2>
     <p class="answer" id="answerLine" hidden></p>
+    <div class="definition" id="definition" hidden></div>
     <div class="stat-row">
       <div><b id="sPlayed">0</b><span>Played</span></div>
       <div><b id="sWin">0</b><span>Win %</span></div>
@@ -399,8 +408,10 @@ function showStats() {
 
   const answerLine = $("answerLine");
   answerLine.hidden = !game.done;
+  $("definition").hidden = true;
   if (game.done) {
     answerLine.replaceChildren(game.won ? "You found " : "The word was ", Object.assign(document.createElement("b"), { textContent: game.answer.toUpperCase() }));
+    showDefinition(game.answer);
   }
   $("statsTitle").textContent = game.done ? (game.won ? "Well forged!" : "The runes held firm") : "Statistics";
 
@@ -415,6 +426,25 @@ function showStats() {
   }));
   $("nextLine").textContent = mode === "daily" && game.done ? "A new daily word arrives at midnight." : "";
   $("statsDialog").showModal();
+}
+
+// Definitions are only downloaded once a game ends, so they can't spoil anything.
+let definitions = null;
+async function showDefinition(word) {
+  try {
+    definitions = definitions || await fetch("definitions.json").then(r => r.ok ? r.json() : Promise.reject());
+  } catch { return; }
+  const d = definitions[word], box = $("definition");
+  if (!d || word !== game.answer) return;
+  const list = document.createElement("ol");
+  if (d.senses.length === 1) list.style.listStyle = "none", list.style.paddingLeft = "0";
+  for (const s of d.senses) list.append(Object.assign(document.createElement("li"), { textContent: s }));
+  box.replaceChildren(
+    Object.assign(document.createElement("em"), { textContent: d.pos }),
+    list,
+    Object.assign(document.createElement("small"), { textContent: "Definition from WordNet, Princeton University" })
+  );
+  box.hidden = false;
 }
 
 function button(label, cls, onClick) {
