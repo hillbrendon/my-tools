@@ -11,6 +11,15 @@ Only the `public/` folder is published (set in `wrangler.jsonc`). Anything outsi
 2. Add a card for it in `public/index.html`.
 3. Commit and push. Cloudflare redeploys automatically.
 
+## Automatic data updates
+
+- **Mortgage rate:** `.github/workflows/update-rates.yml` runs on the 10th of each month, runs
+  `scripts/update_rates.py` to fetch the RBA's average new owner-occupier rate (table F6), and commits
+  `public/mortgage-calculator/rates.json` if it changed. Run it by hand from the repo's **Actions** tab.
+- **Stamp duty:** no state publishes a data feed, so rates are written into
+  `public/mortgage-calculator/index.html` (see `DUTY_SOURCES`). NSW thresholds change every 1 July,
+  so recheck them each year.
+
 ## One-time setup
 
 1. Create an empty **private or public** repo on GitHub named `my-tools` (no README).

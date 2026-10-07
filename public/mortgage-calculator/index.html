@@ -192,7 +192,8 @@
         <option value="QLD">QLD</option>
         <option value="OTHER">Other / manual entry</option>
       </select>
-      <div class="hint">Stamp duty is estimated using standard owner-occupier rates. Check your exact figure with a conveyancer, as concessions and surcharges vary.</div>
+      <div class="hint">Stamp duty is estimated using owner-occupier rates. Check your exact figure with a conveyancer, as concessions and surcharges vary.</div>
+      <div class="hint" id="dutySource"></div>
 
       <label>Manual stamp duty override ($) — leave 0 to use the estimate</label>
       <input type="number" id="dutyOverride" value="0" step="1000">
@@ -213,6 +214,7 @@
         <div>
           <label>Interest rate (% p.a.)</label>
           <input type="number" id="interestRate" value="6.3" step="0.05">
+          <div class="hint" id="rateSource"></div>
         </div>
         <div>
           <label>Loan term (years)</label>
@@ -282,28 +284,40 @@ function fmt(n) {
   return neg ? "-" + s : s;
 }
 
-// Simplified owner-occupier stamp duty estimators (standard rate, no concessions)
+// Owner-occupier stamp duty estimators, checked against each revenue office on 7 Oct 2026.
+// No first-home concessions or foreign buyer surcharges. Update when the official rates change.
+const DUTY_SOURCES = {
+  NSW: { asAt: "2026–27 rates (from 1 July 2026)", url: "https://www.revenue.nsw.gov.au/taxes-duties-levies-royalties/transfer-duty/understanding-transfer-duty/calculate-transfer-duty", name: "Revenue NSW" },
+  VIC: { asAt: "rates for contracts from 1 July 2021, incl. principal place of residence concession", url: "https://www.sro.vic.gov.au/about-us/rates-and-statistics/current-rates", name: "State Revenue Office Victoria" },
+  QLD: { asAt: "home concession rates", url: "https://qro.qld.gov.au/duties/transfer-duty/calculate/concession-rates/", name: "Queensland Revenue Office" }
+};
+
+// NSW general transfer duty plus premium duty, 1 July 2026 – 30 June 2027 (thresholds are CPI-indexed each July)
 function stampDutyNSW(price) {
-  if (price <= 16000) return price * 0.0125;
-  if (price <= 35000) return 200 + (price - 16000) * 0.015;
-  if (price <= 93000) return 485 + (price - 35000) * 0.0175;
-  if (price <= 351000) return 1500 + (price - 93000) * 0.035;
-  if (price <= 1168000) return 10530 + (price - 351000) * 0.045;
-  return 47295 + (price - 1168000) * 0.055;
+  if (price <= 18000) return Math.max(price * 0.0125, 20);
+  if (price <= 38000) return 225 + (price - 18000) * 0.015;
+  if (price <= 103000) return 525 + (price - 38000) * 0.0175;
+  if (price <= 387000) return 1662 + (price - 103000) * 0.035;
+  if (price <= 1290000) return 11602 + (price - 387000) * 0.045;
+  if (price <= 3870000) return 52237 + (price - 1290000) * 0.055;
+  return 194137 + (price - 3870000) * 0.07;
 }
+// VIC general rates, with the principal place of residence (PPR) concession between $130,000 and $550,000
 function stampDutyVIC(price) {
   if (price <= 25000) return price * 0.014;
   if (price <= 130000) return 350 + (price - 25000) * 0.024;
+  if (price <= 440000) return 2870 + (price - 130000) * 0.05;   // PPR concession
+  if (price <= 550000) return 18370 + (price - 440000) * 0.06;  // PPR concession
   if (price <= 960000) return 2870 + (price - 130000) * 0.06;
   if (price <= 2000000) return price * 0.055;
   return 110000 + (price - 2000000) * 0.065;
 }
+// QLD home concession rates (buying a home you will live in)
 function stampDutyQLD(price) {
-  if (price <= 5000) return 0;
-  if (price <= 75000) return (price - 5000) * 0.015;
-  if (price <= 540000) return 1050 + (price - 75000) * 0.035;
-  if (price <= 1000000) return 17325 + (price - 540000) * 0.045;
-  return 38025 + (price - 1000000) * 0.0575;
+  if (price <= 350000) return price * 0.01;
+  if (price <= 540000) return 3500 + (price - 350000) * 0.035;
+  if (price <= 1000000) return 10150 + (price - 540000) * 0.045;
+  return 30850 + (price - 1000000) * 0.0575;
 }
 
 function dutyFor(price, state, dutyOverride) {
@@ -464,6 +478,18 @@ function calc() {
     document.getElementById('headlineRange').textContent = mode === "forward" ? "Based on the figures entered above" : "Sale/purchase price to hit your target mortgage & buffer";
   }
 
+  const src = DUTY_SOURCES[state];
+  const dutySource = document.getElementById('dutySource');
+  dutySource.replaceChildren();
+  if (src) {
+    const link = document.createElement('a');
+    link.href = src.url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = src.name;
+    dutySource.append("Source: ", link, " — " + src.asAt + ".");
+  }
+
   if (state === "OTHER" && dutyOverride === 0) {
     warningNote.style.display = 'block';
     warningNote.textContent = "No stamp duty estimate is available for the selected state — enter a manual figure above for an accurate result.";
@@ -518,6 +544,25 @@ bufferNum.addEventListener('input', () => { bufferSlider.value = bufferNum.value
 bufferSlider.addEventListener('input', () => { bufferNum.value = bufferSlider.value; calc(); });
 
 applyModeUI();
+
+// Pre-fill the interest rate with the RBA's latest average, saved monthly into rates.json.
+// If it can't be loaded, the default rate above is kept.
+fetch('rates.json', { cache: 'no-cache' })
+  .then(r => r.ok ? r.json() : Promise.reject())
+  .then(data => {
+    if (typeof data.rate !== 'number') return;
+    document.getElementById('interestRate').value = data.rate;
+    const link = document.createElement('a');
+    link.href = data.sourceUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'RBA';
+    document.getElementById('rateSource').append(
+      "Average for new owner-occupier loans, " + data.month + " (", link, "). Change it to your lender's rate."
+    );
+    calc();
+  })
+  .catch(() => {});
 </script>
 </body>
 </html>
