@@ -1,0 +1,17 @@
+# Secrets: never commit these
+.env
+.env.*
+*.pem
+*.key
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Dependencies and build output (if a tool ever uses them)
+node_modules/
+dist/
+.wrangler/
