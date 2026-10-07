@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pack Surge · Fenrir Forge</title>
+<meta name="description" content="Pack Surge: send your wolf pack through multiplying gates and storm the enemy fortress. Free, endless levels.">
+<link rel="icon" href="../logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { height: 100%; }
+  body {
+    max-width: 520px; padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .back { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+  h1 { margin: 0; font-family: "Cinzel", Georgia, serif; font-size: 1.4rem; letter-spacing: 0.05em; }
+  .lvl { font-weight: 700; color: var(--muted); font-size: 0.9rem; min-width: 70px; text-align: right; }
+  .stage { position: relative; flex: 1; min-height: 0; display: flex; justify-content: center; }
+  canvas { display: block; border-radius: 12px; touch-action: none; background: #16241f; max-width: 100%; max-height: 100%; }
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; text-align: center; color: #fff; padding: 24px; background: rgba(10, 14, 12, 0.72); border-radius: 12px;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay h2 { font-family: "Cinzel", Georgia, serif; font-size: 2rem; margin: 0; letter-spacing: 0.04em; }
+  .overlay p { margin: 0; color: #d4d9de; max-width: 300px; line-height: 1.45; }
+  .stars { font-size: 2rem; letter-spacing: 6px; color: #fbbf24; }
+  .btn {
+    font: inherit; font-weight: 700; font-size: 1rem; padding: 12px 26px; border-radius: 10px; cursor: pointer;
+    border: none; background: var(--accent); color: #fff; margin-top: 6px;
+  }
+  .btn.ghost { background: transparent; border: 1px solid #6b7480; color: #fff; font-size: 0.9rem; padding: 8px 18px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .tips { font-size: 0.85rem; text-align: left; color: #d4d9de; max-width: 300px; padding-left: 18px; margin: 4px 0; }
+  .tips li { margin: 4px 0; }
+</style>
+</head>
+<body>
+  <header>
+    <a class="back" href="../">&larr; Fenrir Forge</a>
+    <h1>Pack Surge</h1>
+    <span class="lvl" id="lvl">Level 1</span>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="game" aria-label="Pack Surge game"></canvas>
+
+    <div class="overlay" id="startScreen">
+      <h2 id="startTitle">Level 1</h2>
+      <p id="startSub">Storm the fortress!</p>
+      <ul class="tips">
+        <li><b>Drag</b> left and right to aim your wolf launcher. It fires on its own.</li>
+        <li>Send wolves through <b style="color:#fb923c">ember gates</b> to multiply them. Avoid <b style="color:#f87171">red gates</b>.</li>
+        <li>Wolves and draugr destroy each other. Reach the fortress to smash its walls.</li>
+        <li>When the <b>Alpha</b> meter is full, tap it (or press Space) to unleash a giant wolf.</li>
+        <li>Don't let the draugr reach your den!</li>
+      </ul>
+      <button class="btn" id="startBtn">Start</button>
+    </div>
+
+    <div class="overlay" id="endScreen" hidden>
+      <h2 id="endTitle"></h2>
+      <div class="stars" id="endStars"></div>
+      <p id="endSub"></p>
+      <div class="row">
+        <button class="btn" id="endMain"></button>
+      </div>
+      <button class="btn ghost" id="endRetry">Replay level</button>
+    </div>
+  </div>
+
+<script>
+// ---------- Setup ----------
+const W = 400, H = 700;               // logical playfield size; scaled to fit the screen
+const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+let progress = store.get("ff-pack-surge", { level: 1, best: 1, stars: {} });
+
+function fit() {
+  const stage = $("stage").getBoundingClientRect();
+  const scale = Math.min(stage.width / W, stage.height / H);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.style.width = W * scale + "px";
+  canvas.style.height = H * scale + "px";
+  canvas.width = W * scale * dpr;
+  canvas.height = H * scale * dpr;
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  draw();
+}
+addEventListener("resize", fit);
+
+const BASE_Y = 70, DEN_Y = 630, LAUNCHER_Y = 655, MAX_WOLVES = 450;
+const C = {
+  field: "#16241f", path: "#1d3029", line: "#284038",
+  wolf: "#fb923c", wolfDark: "#c2410c", alpha: "#fde68a",
+  foe: "#60a5fa", foeDark: "#1e3a8a", brute: "#a78bfa",
+  gate: "rgba(251,146,60,0.28)", gateEdge: "#fb923c", trap: "rgba(248,113,113,0.28)", trapEdge: "#f87171",
+  stone: "#4b5563", stoneDark: "#374151", text: "#ffffff"
+};
+
+// ---------- Level design ----------
+// Everything scales with the level number, so the game never runs out of levels.
+function levelConfig(n) {
+  const rnd = mulberry32(n * 7919);
+  const gates = [];
+  const rows = Math.min(2 + Math.floor(n / 3), 4);
+  const traps = n < 4 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3;
+  const speed = () => (35 + Math.min(n * 3, 55) + rnd() * 30) * (rnd() < 0.5 ? -1 : 1);
+  // Every row has a multiplier gate; traps are extra gates sharing a row (never the first row).
+  for (let r = 0; r < rows; r++) {
+    const y = 500 - r * (330 / rows);
+    const mult = [2, 2, 3, 2, 3, 4][Math.floor(rnd() * Math.min(3 + Math.floor(n / 4), 6))];
+    const w = 115 - Math.min(n * 1.5, 35) + rnd() * 20;
+    gates.push({ id: gates.length, y, w, h: 26, x: rnd() * (W - w), speed: speed(), mult, trap: false });
+  }
+  for (let t = 0; t < traps; t++) {
+    const row = 1 + (t % (rows - 1)), w = 60 + rnd() * 30;
+    gates.push({ id: gates.length, y: 500 - row * (330 / rows), w, h: 26, x: rnd() * (W - w), speed: speed() * 1.2, mult: 0, trap: true });
+  }
+  return {
+    baseHp: Math.round(160 + n * 55 + n * n * 0.8),
+    denHp: 10,
+    foeRate: 1.0 + n * 0.13,              // draugr per second
+    bruteChance: n >= 5 ? Math.min(0.05 + (n - 5) * 0.015, 0.3) : 0,
+    fireRate: 5.5 + Math.min(n * 0.15, 3), // wolves per second
+    gates
+  };
+}
+function mulberry32(a) {
+  return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+// ---------- State ----------
+let cfg, wolves, foes, effects, launcherX, targetX, baseHp, denHp, fireTimer, foeTimer, alphaCharge, state, lastTime, shake;
+const ALPHA_NEEDED = 60;
+
+function reset() {
+  cfg = levelConfig(progress.level);
+  wolves = []; foes = []; effects = [];
+  launcherX = targetX = W / 2;
+  baseHp = cfg.baseHp; denHp = cfg.denHp;
+  fireTimer = 0; foeTimer = 1.2; alphaCharge = 0; shake = 0;
+  cfg.gates.forEach(g => g.cx = g.x);
+  $("lvl").textContent = "Level " + progress.level;
+}
+
+function spawnWolf(x, y, passed, alpha) {
+  if (!alpha && wolves.length >= MAX_WOLVES) return;
+  wolves.push({ x, y, vx: 0, r: alpha ? 16 : 6, hp: alpha ? 10 : 1, alpha: !!alpha, passed: new Set(passed), speed: alpha ? 95 : 150 });
+}
+function spawnFoe() {
+  const brute = Math.random() < cfg.bruteChance;
+  foes.push({ x: 60 + Math.random() * (W - 120), y: BASE_Y + 40, r: brute ? 12 : 7, hp: brute ? 6 : 1, maxHp: brute ? 6 : 1, brute, speed: brute ? 38 : 55 + progress.level * 1.5 });
+}
+
+// ---------- Update ----------
+function update(dt) {
+  launcherX += (targetX - launcherX) * Math.min(1, dt * 14);
+
+  fireTimer -= dt;
+  while (fireTimer <= 0) { spawnWolf(launcherX + (Math.random() - 0.5) * 6, LAUNCHER_Y - 18, [], false); fireTimer += 1 / cfg.fireRate; }
+
+  foeTimer -= dt;
+  while (foeTimer <= 0) { spawnFoe(); foeTimer += 1 / cfg.foeRate * (0.6 + Math.random() * 0.8); }
+
+  for (const g of cfg.gates) {
+    g.cx += g.speed * dt;
+    if (g.cx < 0) { g.cx = 0; g.speed *= -1; }
+    if (g.cx + g.w > W) { g.cx = W - g.w; g.speed *= -1; }
+  }
+
+  // Wolves run up, drift toward the centre line slightly, and trigger gates once each.
+  const born = [];
+  for (const w of wolves) {
+    w.y -= w.speed * dt;
+    w.x += w.vx * dt; w.vx *= 0.9;
+    w.x = Math.max(w.r, Math.min(W - w.r, w.x));
+    for (const g of cfg.gates) {
+      if (w.passed.has(g.id) || w.alpha) continue;
+      if (w.y < g.y + g.h && w.y > g.y && w.x > g.cx && w.x < g.cx + g.w) {
+        w.passed.add(g.id);
+        if (g.trap) { w.hp = 0; effects.push({ x: w.x, y: w.y, t: 0, c: C.trapEdge }); }
+        else for (let k = 1; k < g.mult; k++) born.push([w.x + (Math.random() - 0.5) * 18, w.y - 4 - Math.random() * 10, w.passed]);
+      }
+    }
+    if (w.y < BASE_Y + 28 && w.hp > 0) {
+      baseHp -= w.alpha ? 15 : 1; w.hp = 0; shake = Math.min(shake + (w.alpha ? 8 : 0.6), 10);
+      effects.push({ x: w.x, y: BASE_Y + 28, t: 0, c: C.wolf });
+    }
+  }
+  born.forEach(b => { spawnWolf(b[0], b[1], b[2], false); const n = wolves[wolves.length - 1]; if (n) n.vx = (Math.random() - 0.5) * 120; });
+
+  for (const f of foes) {
+    f.y += f.speed * dt;
+    // Draugr close in on the launcher as they near the den, so the battle stays in front of you.
+    const pull = Math.max(0, (f.y - 250) / (DEN_Y - 250));
+    f.x += Math.sign(launcherX - f.x) * Math.min(Math.abs(launcherX - f.x), 45 * pull * dt);
+    if (f.y > DEN_Y && f.hp > 0) { denHp -= f.brute ? 3 : 1; f.hp = 0; shake = 6; effects.push({ x: f.x, y: DEN_Y, t: 0, c: C.foe }); }
+  }
+
+  // Clashes: each hit costs both sides one point of health.
+  for (const f of foes) {
+    if (f.hp <= 0) continue;
+    for (const w of wolves) {
+      if (w.hp <= 0) continue;
+      const dx = w.x - f.x, dy = w.y - f.y, rr = w.r + f.r;
+      if (dx * dx + dy * dy < rr * rr) {
+        const hit = Math.min(w.hp, f.hp);
+        w.hp -= hit; f.hp -= hit;
+        if (!w.alpha) alphaCharge = Math.min(ALPHA_NEEDED, alphaCharge + 1);
+        if (f.hp <= 0) effects.push({ x: f.x, y: f.y, t: 0, c: f.brute ? C.brute : C.foe });
+        if (f.hp <= 0) break;
+      }
+    }
+  }
+  wolves = wolves.filter(w => w.hp > 0 && w.y > -20);
+  foes = foes.filter(f => f.hp > 0);
+  effects = effects.filter(e => (e.t += dt) < 0.35);
+  shake = Math.max(0, shake - dt * 20);
+
+  if (baseHp <= 0) finish(true);
+  else if (denHp <= 0) finish(false);
+}
+
+function releaseAlpha() {
+  if (state !== "play" || alphaCharge < ALPHA_NEEDED) return;
+  alphaCharge = 0;
+  spawnWolf(launcherX, LAUNCHER_Y - 30, [], true);
+}
+
+// ---------- Drawing ----------
+function draw() {
+  if (!cfg) return;
+  ctx.save();
+  if (shake) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+  ctx.fillStyle = C.field; ctx.fillRect(-20, -20, W + 40, H + 40);
+  ctx.fillStyle = C.path; ctx.fillRect(30, BASE_Y, W - 60, DEN_Y - BASE_Y);
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.setLineDash([6, 10]);
+  for (let x = 100; x < W; x += 100) { ctx.beginPath(); ctx.moveTo(x, BASE_Y + 40); ctx.lineTo(x, DEN_Y - 10); ctx.stroke(); }
+  ctx.setLineDash([]);
+
+  drawFortress();
+  for (const g of cfg.gates) drawGate(g);
+  for (const f of foes) drawFoe(f);
+  for (const w of wolves) drawWolf(w);
+  for (const e of effects) {
+    ctx.globalAlpha = 1 - e.t / 0.35; ctx.strokeStyle = e.c; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(e.x, e.y, 6 + e.t * 50, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  drawDen();
+  ctx.restore();
+}
+
+function drawFortress() {
+  const pct = Math.max(0, baseHp / cfg.baseHp);
+  ctx.fillStyle = C.stoneDark; ctx.fillRect(40, 18, W - 80, BASE_Y + 10 - 18);
+  ctx.fillStyle = C.stone;
+  for (let x = 40; x < W - 40; x += 32) ctx.fillRect(x, 8, 20, 14);   // battlements
+  ctx.fillRect(40, 22, W - 80, 10);
+  ctx.fillStyle = "#111827"; ctx.beginPath(); ctx.arc(W / 2, BASE_Y + 10, 22, Math.PI, 0); ctx.fill(); // gate arch
+  ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(60, 38, W - 120, 12);
+  ctx.fillStyle = pct > 0.3 ? "#60a5fa" : "#f87171"; ctx.fillRect(60, 38, (W - 120) * pct, 12);
+  ctx.fillStyle = C.text; ctx.font = "700 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(`FORTRESS ${Math.max(0, Math.ceil(baseHp))}`, W / 2, 44.5);
+}
+
+function drawGate(g) {
+  ctx.fillStyle = g.trap ? C.trap : C.gate;
+  ctx.strokeStyle = g.trap ? C.trapEdge : C.gateEdge; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(g.cx, g.y, g.w, g.h, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = C.text; ctx.font = "700 16px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(g.trap ? "✕" : "×" + g.mult, g.cx + g.w / 2, g.y + g.h / 2 + 1);
+}
+
+function drawWolf(w) {
+  const r = w.r;
+  ctx.fillStyle = w.alpha ? C.alpha : C.wolf;
+  ctx.beginPath(); // ears
+  ctx.moveTo(w.x - r * 0.9, w.y - r * 0.2); ctx.lineTo(w.x - r * 0.55, w.y - r * 1.5); ctx.lineTo(w.x - r * 0.05, w.y - r * 0.7);
+  ctx.moveTo(w.x + r * 0.9, w.y - r * 0.2); ctx.lineTo(w.x + r * 0.55, w.y - r * 1.5); ctx.lineTo(w.x + r * 0.05, w.y - r * 0.7);
+  ctx.fill();
+  ctx.beginPath(); ctx.arc(w.x, w.y, r, 0, Math.PI * 2); ctx.fill();
+  if (w.alpha) {
+    ctx.fillStyle = C.wolfDark; ctx.font = "700 12px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(w.hp, w.x, w.y + 1);
+  }
+}
+
+function drawFoe(f) {
+  ctx.fillStyle = f.brute ? C.brute : C.foe;
+  ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = f.brute ? C.brute : C.foe; ctx.lineWidth = 2; // horns
+  ctx.beginPath();
+  ctx.moveTo(f.x - f.r * 0.6, f.y - f.r * 0.6); ctx.quadraticCurveTo(f.x - f.r * 1.4, f.y - f.r * 0.9, f.x - f.r * 1.2, f.y - f.r * 1.7);
+  ctx.moveTo(f.x + f.r * 0.6, f.y - f.r * 0.6); ctx.quadraticCurveTo(f.x + f.r * 1.4, f.y - f.r * 0.9, f.x + f.r * 1.2, f.y - f.r * 1.7);
+  ctx.stroke();
+  if (f.brute) {
+    ctx.fillStyle = C.foeDark; ctx.font = "700 10px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(f.hp, f.x, f.y + 1);
+  }
+}
+
+function drawDen() {
+  ctx.fillStyle = "#0f1a16"; ctx.fillRect(0, DEN_Y + 8, W, H - DEN_Y);
+  ctx.strokeStyle = denHp <= 3 ? "#f87171" : "#3f5b51"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, DEN_Y + 8); ctx.lineTo(W, DEN_Y + 8); ctx.stroke();
+  // Launcher: a wolf-head shield that follows your finger.
+  const x = launcherX, y = LAUNCHER_Y;
+  ctx.fillStyle = "#1f2328"; ctx.strokeStyle = "#6b7480"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x, y - 26); ctx.lineTo(x + 20, y - 18); ctx.lineTo(x + 20, y + 2); ctx.quadraticCurveTo(x + 20, y + 16, x, y + 24);
+  ctx.quadraticCurveTo(x - 20, y + 16, x - 20, y + 2); ctx.lineTo(x - 20, y - 18); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#e9ecef";
+  ctx.beginPath(); ctx.moveTo(x - 11, y - 14); ctx.lineTo(x - 5, y - 6); ctx.lineTo(x + 5, y - 6); ctx.lineTo(x + 11, y - 14); ctx.lineTo(x + 12, y + 2); ctx.lineTo(x, y + 16); ctx.lineTo(x - 12, y + 2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = C.wolfDark; ctx.fillRect(x - 7, y - 1, 4, 2); ctx.fillRect(x + 3, y - 1, 4, 2);
+
+  // Den health
+  ctx.font = "700 12px system-ui, sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.fillStyle = C.text;
+  ctx.fillText("DEN", 12, H - 24);
+  for (let i = 0; i < cfg.denHp; i++) { ctx.fillStyle = i < denHp ? "#fb923c" : "#2a3a34"; ctx.fillRect(44 + i * 9, H - 30, 6, 12); }
+
+  // Alpha meter (tap to release)
+  const ready = alphaCharge >= ALPHA_NEEDED, bx = W - 116, by = H - 40, bw = 104, bh = 30;
+  ctx.fillStyle = ready ? C.alpha : "#2a3a34"; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 8); ctx.fill();
+  if (!ready) { ctx.fillStyle = "#c2410c"; ctx.beginPath(); ctx.roundRect(bx, by, bw * alphaCharge / ALPHA_NEEDED, bh, 8); ctx.fill(); }
+  ctx.fillStyle = ready ? "#7c2d12" : C.text; ctx.textAlign = "center";
+  ctx.fillText(ready ? "ALPHA! TAP" : "ALPHA", bx + bw / 2, by + bh / 2 + 1);
+
+  ctx.textAlign = "right"; ctx.fillStyle = "#9ca3af"; ctx.font = "600 11px system-ui";
+  ctx.fillText(`Pack: ${wolves.length}`, W - 12, DEN_Y - 4 + 0);
+}
+
+// ---------- Flow ----------
+function loop(t) {
+  if (state !== "play") return;
+  const dt = Math.min(0.05, (t - lastTime) / 1000 || 0);
+  lastTime = t;
+  update(dt);
+  draw();
+  if (state === "play") requestAnimationFrame(loop);
+}
+
+function start() {
+  reset();
+  $("startScreen").hidden = true; $("endScreen").hidden = true;
+  state = "play"; lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+function finish(won) {
+  state = "over";
+  draw();
+  const n = progress.level;
+  if (won) {
+    const stars = denHp >= cfg.denHp * 0.8 ? 3 : denHp >= cfg.denHp * 0.4 ? 2 : 1;
+    progress.stars[n] = Math.max(progress.stars[n] || 0, stars);
+    progress.best = Math.max(progress.best, n + 1);
+    $("endTitle").textContent = "Victory!";
+    $("endStars").textContent = "★".repeat(stars) + "☆".repeat(3 - stars);
+    $("endSub").textContent = `Fortress ${n} has fallen. Den health left: ${denHp} of ${cfg.denHp}.`;
+    $("endMain").textContent = "Next level";
+    $("endMain").onclick = () => { progress.level = n + 1; store.set("ff-pack-surge", progress); start(); };
+  } else {
+    $("endTitle").textContent = "The den has fallen";
+    $("endStars").textContent = "";
+    $("endSub").textContent = `The fortress had ${Math.ceil(baseHp)} strength left. Line up more gates to grow your pack faster.`;
+    $("endMain").textContent = "Try again";
+    $("endMain").onclick = start;
+  }
+  store.set("ff-pack-surge", progress);
+  $("endScreen").hidden = false;
+}
+
+// ---------- Controls ----------
+function toLogical(e) {
+  const r = canvas.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H];
+}
+canvas.addEventListener("pointerdown", e => {
+  const [x, y] = toLogical(e);
+  if (x > W - 120 && y > H - 44) { releaseAlpha(); return; }
+  canvas.setPointerCapture(e.pointerId);
+  targetX = Math.max(22, Math.min(W - 22, x));
+});
+canvas.addEventListener("pointermove", e => {
+  if (e.pointerType === "mouse" || e.buttons) targetX = Math.max(22, Math.min(W - 22, toLogical(e)[0]));
+});
+const keys = {};
+addEventListener("keydown", e => {
+  if (e.key === " ") { e.preventDefault(); releaseAlpha(); }
+  if (e.key === "Enter" && state !== "play") { e.preventDefault(); (!$("endScreen").hidden ? $("endMain") : $("startBtn")).click(); }
+  keys[e.key] = true;
+});
+addEventListener("keyup", e => keys[e.key] = false);
+setInterval(() => {
+  if (state !== "play") return;
+  if (keys.ArrowLeft || keys.a) targetX = Math.max(22, targetX - 9);
+  if (keys.ArrowRight || keys.d) targetX = Math.min(W - 22, targetX + 9);
+}, 16);
+document.addEventListener("visibilitychange", () => { if (document.hidden && state === "play") { state = "paused"; } else if (!document.hidden && state === "paused") { state = "play"; lastTime = performance.now(); requestAnimationFrame(loop); } });
+
+$("startBtn").onclick = start;
+$("endRetry").onclick = start;
+
+reset();
+$("startTitle").textContent = "Level " + progress.level;
+$("startSub").textContent = progress.level === 1 ? "Storm the fortress!" : `Welcome back. Highest level reached: ${progress.best}.`;
+fit();
+</script>
+</body>
+</html>
