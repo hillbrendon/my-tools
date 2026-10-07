@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Fenrir Forge mark: faceted wolf head on a guardian shield. Also used as the favicon. -->
+  <path fill="#1f2328" stroke="#6b7480" stroke-width="3" stroke-linejoin="round" d="M50 4.5 L89.5 16 V49 Q89.5 80 50 95.5 Q10.5 80 10.5 49 V16 Z"/>
+  <path fill="#e9ecef" d="M26 20 L39 37 L50 33 L61 37 L74 20 L78 53 L63 67 L50 87 L37 67 L22 53 Z"/>
+  <path fill="#aeb6bf" d="M50 33 L57 50 L50 71 L43 50 Z"/>
+  <path fill="#aeb6bf" d="M28 27 L36 38 L30 45 Z M72 27 L64 38 L70 45 Z"/>
+  <path fill="#aeb6bf" d="M22 53 L37 67 L32 56 Z M78 53 L63 67 L68 56 Z"/>
+  <path fill="#ea580c" d="M33 51 L43 54 L35 57 Z M67 51 L57 54 L65 57 Z"/>
+  <path fill="#1f2328" d="M46 76 L54 76 L50 82 Z"/>
+</svg>

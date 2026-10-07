@@ -1,6 +1,6 @@
-# My Tools
+# Fenrir Forge
 
-A static site collecting the small apps and tools I build. Hosted free on Cloudflare Workers
+Tools forged to guard what's yours. A static site collecting the apps and tools I build. Hosted free on Cloudflare Workers
 at https://my-tools.hill-brendon.workers.dev.
 
 Only the `public/` folder is published (set in `wrangler.jsonc`). Anything outside it stays private.

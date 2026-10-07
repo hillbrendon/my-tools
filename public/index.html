@@ -1,28 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-AU">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Tools</title>
-  <meta name="description" content="A collection of small apps and tools I've built.">
+  <title>Fenrir Forge</title>
+  <meta name="description" content="Fenrir Forge: practical tools forged to guard what's yours.">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <h1>My Tools</h1>
-    <p>Small apps and tools I've built with Claude.</p>
+  <header class="hero">
+    <img class="logo" src="logo.svg" alt="" width="88" height="88">
+    <div>
+      <h1>Fenrir Forge</h1>
+      <p class="tagline">Tools forged to guard what's yours.</p>
+    </div>
   </header>
 
+  <h2 class="section-title">The armoury</h2>
   <main class="grid">
-    <!-- Add one card per tool. href points to the tool's folder. -->
+    <!-- Add one card per tool. href points to the tool's folder inside public/. -->
     <a class="card" href="mortgage-calculator/">
-      <h2>Mortgage Reduction Calculator</h2>
+      <span class="tag">Property &amp; finance</span>
+      <h3>Mortgage Reduction Calculator</h3>
       <p>Estimate your new mortgage after selling and buying, including selling costs, stamp duty and a savings buffer.</p>
+      <span class="go">Open tool &rarr;</span>
     </a>
   </main>
 
   <footer>
-    <p>Everything here runs in your browser. No data is sent anywhere.</p>
+    <p>Every tool runs in your browser. Nothing you enter is saved or sent anywhere.</p>
   </footer>
 </body>
 </html>
