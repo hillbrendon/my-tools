@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mortgage Reduction Calculator</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --accent: #2f5d50;
+    --accent-light: #e8f0ed;
+    --warn: #9a3412;
+    --warn-bg: #fdf2e9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  .back { font-size: 0.85rem; color: var(--accent); text-decoration: none; }
+  .back:hover { text-decoration: underline; }
+  h1 { font-size: 1.4rem; margin-bottom: 2px; }
+  .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  @media (min-width: 760px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card h2 {
+    font-size: 1.02rem;
+    margin: 0 0 14px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  label {
+    display: block;
+    font-size: 0.83rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+    margin-top: 14px;
+  }
+  label:first-of-type { margin-top: 0; }
+  input[type="number"] {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #fff;
+  }
+  input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: #fff;
+  }
+  .hint { font-size: 0.74rem; color: var(--muted); margin-top: 3px; }
+  input[type="range"] {
+    width: 100%;
+    margin-top: 8px;
+    accent-color: var(--accent);
+  }
+  .slider-wrap { margin-top: 2px; }
+
+  .results { grid-column: 1 / -1; }
+  .headline {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 12px;
+    padding: 22px;
+    text-align: center;
+    margin-bottom: 18px;
+  }
+  .headline .label { font-size: 0.85rem; opacity: 0.85; }
+  .headline .value { font-size: 2.1rem; font-weight: 700; margin: 4px 0; }
+  .headline .range { font-size: 0.85rem; opacity: 0.9; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.02em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.total td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom: none; padding-top: 10px; }
+  tr.deduct td.num { color: var(--warn); }
+  tr.result td { background: var(--accent-light); font-weight: 700; }
+  tr.result td.num { color: var(--accent); font-size: 1.05rem; }
+
+  .note {
+    background: var(--warn-bg);
+    border: 1px solid #f3d5b5;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.82rem;
+    color: #7c2d12;
+    margin-top: 16px;
+  }
+  .footer-note { font-size: 0.76rem; color: var(--muted); margin-top: 20px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../">&larr; All tools</a>
+  <h1>Mortgage Reduction Calculator</h1>
+  <div class="sub">Estimate a new mortgage after selling and buying, including selling costs, stamp duty and a savings buffer.</div>
+
+  <div class="grid">
+    <div class="card results" style="margin-bottom:-4px;">
+      <h2>Calculation mode</h2>
+      <label>What do you want to solve for?</label>
+      <select id="calcMode">
+        <option value="forward">I know both prices — calculate my new mortgage</option>
+        <option value="solveSale">I have a target mortgage & savings goal — calculate the sale price I need</option>
+        <option value="solveBuy">I have a target mortgage & savings goal — calculate the purchase budget I can afford</option>
+      </select>
+
+      <div id="targetMortgageWrap" style="display:none;">
+        <label>How do you want to set your target?</label>
+        <select id="targetBasis">
+          <option value="amount">I know the mortgage amount I want</option>
+          <option value="repayment">I know what I can afford to repay each period</option>
+        </select>
+
+        <div id="repaymentTargetWrap" style="display:none;">
+          <label id="desiredRepaymentLabel">Desired repayment per fortnight ($)</label>
+          <input type="number" id="desiredRepayment" value="1500" step="50">
+          <div class="hint">Uses the interest rate, loan term and repayment frequency set in the "New mortgage details" section below.</div>
+        </div>
+
+        <label id="targetMortgageLabel">Target new mortgage ($)</label>
+        <input type="number" id="targetMortgage" value="300000" step="5000">
+        <div class="hint" id="targetMortgageHint" style="display:none;">Calculated from your desired repayment.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Selling the current home</h2>
+      <label id="salePriceLabel">Expected sale price ($)</label>
+      <input type="number" id="salePrice" value="1900000" step="10000">
+
+      <label>Agent commission (%)</label>
+      <input type="number" id="agentPct" value="2.0" step="0.1">
+      <div class="hint">Typical Australian range is 1.8%–2.5% of the sale price.</div>
+
+      <label>Marketing fees payable on sale ($)</label>
+      <input type="number" id="marketingFees" value="8000" step="500">
+      <div class="hint">Advertising, photography, signage and styling charges that are settled from the sale proceeds. Check the figure in your agent's agreement.</div>
+
+      <label>Other selling costs ($) — conveyancing, styling, etc.</label>
+      <input type="number" id="sellExtra" value="3000" step="500">
+
+      <label>Discharge of mortgage & registration fees ($)</label>
+      <input type="number" id="sellGovFees" value="329" step="1">
+      <div class="hint">NSW LRS discharge of mortgage registration ($182.73) plus PEXA electronic lodgement fee (~$146.30). Adjust for your lender's own discharge fee or a different state.</div>
+
+      <label>Current mortgage payout ($)</label>
+      <input type="number" id="mortgagePayout" value="980000" step="5000">
+      <div class="slider-wrap">
+        <input type="range" id="mortgagePayoutSlider" min="0" max="2000000" step="5000" value="980000">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Buying the new home</h2>
+      <label id="buyPriceLabel">Expected purchase price ($)</label>
+      <input type="number" id="buyPrice" value="1100000" step="10000">
+
+      <label>State/territory (for stamp duty estimate)</label>
+      <select id="state">
+        <option value="NSW" selected>NSW</option>
+        <option value="VIC">VIC</option>
+        <option value="QLD">QLD</option>
+        <option value="OTHER">Other / manual entry</option>
+      </select>
+      <div class="hint">Stamp duty is estimated using standard owner-occupier rates. Check your exact figure with a conveyancer, as concessions and surcharges vary.</div>
+
+      <label>Manual stamp duty override ($) — leave 0 to use the estimate</label>
+      <input type="number" id="dutyOverride" value="0" step="1000">
+
+      <label>Legal / conveyancing fees on purchase ($)</label>
+      <input type="number" id="buyLegal" value="2000" step="250">
+
+      <label>Savings buffer you want left over ($)</label>
+      <input type="number" id="buffer" value="0" step="5000">
+      <div class="slider-wrap">
+        <input type="range" id="bufferSlider" min="0" max="500000" step="5000" value="0">
+      </div>
+    </div>
+
+    <div class="card results">
+      <h2>New mortgage details</h2>
+      <div class="row">
+        <div>
+          <label>Interest rate (% p.a.)</label>
+          <input type="number" id="interestRate" value="6.3" step="0.05">
+        </div>
+        <div>
+          <label>Loan term (years)</label>
+          <input type="number" id="loanTerm" value="30" step="1">
+        </div>
+      </div>
+      <label>Repayment frequency</label>
+      <select id="repayFreq">
+        <option value="12">Monthly</option>
+        <option value="26" selected>Fortnightly</option>
+        <option value="52">Weekly</option>
+      </select>
+
+      <table style="margin-top:16px;">
+        <tr class="result"><td>Repayment per period</td><td class="num" id="r_repayment">$0</td></tr>
+        <tr><td>Total repayments over the term</td><td class="num" id="r_totalRepaid">$0</td></tr>
+        <tr><td>Total interest paid over the term</td><td class="num" id="r_totalInterest">$0</td></tr>
+      </table>
+      <div class="hint" id="repayHint" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="card results">
+      <div class="headline">
+        <div class="label" id="headlineLabel">Estimated new mortgage</div>
+        <div class="value" id="headlineValue">$0</div>
+        <div class="range" id="headlineRange"></div>
+      </div>
+
+      <table>
+        <tr><th>Selling side</th><th class="num">Amount</th></tr>
+        <tr><td>Sale price</td><td class="num" id="r_salePrice">$0</td></tr>
+        <tr class="deduct"><td>Less agent commission</td><td class="num" id="r_agent">$0</td></tr>
+        <tr class="deduct"><td>Less marketing fees (payable on sale)</td><td class="num" id="r_marketing">$0</td></tr>
+        <tr class="deduct"><td>Less other selling costs</td><td class="num" id="r_sellExtra">$0</td></tr>
+        <tr class="deduct"><td>Less govt discharge/registration fees</td><td class="num" id="r_sellGovFees">$0</td></tr>
+        <tr class="deduct"><td>Less mortgage payout</td><td class="num" id="r_payout">$0</td></tr>
+        <tr class="total"><td>Net equity released</td><td class="num" id="r_equity">$0</td></tr>
+      </table>
+
+      <table style="margin-top:16px;">
+        <tr><th>Buying side</th><th class="num">Amount</th></tr>
+        <tr><td>Purchase price</td><td class="num" id="r_buyPrice">$0</td></tr>
+        <tr><td>Plus stamp duty (estimated)</td><td class="num" id="r_duty">$0</td></tr>
+        <tr><td>Plus legal / conveyancing</td><td class="num" id="r_buyLegal">$0</td></tr>
+        <tr><td>Plus savings buffer</td><td class="num" id="r_buffer">$0</td></tr>
+        <tr class="total"><td>Total funds required</td><td class="num" id="r_totalCost">$0</td></tr>
+      </table>
+
+      <table style="margin-top:16px;">
+        <tr class="result"><td id="r_finalLabel">New mortgage required</td><td class="num" id="r_final">$0</td></tr>
+      </table>
+
+      <div class="note" id="warningNote" style="display:none;"></div>
+
+      <div class="footer-note">
+        Stamp duty figures are estimates based on published owner-occupier rates and do not account for first-home concessions, foreign buyer surcharges, or off-the-plan discounts. This tool is for planning purposes only — confirm final figures with your conveyancer, lender and agent before making decisions.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function fmt(n) {
+  const neg = n < 0;
+  n = Math.round(Math.abs(n));
+  const s = "$" + n.toLocaleString("en-AU");
+  return neg ? "-" + s : s;
+}
+
+// Simplified owner-occupier stamp duty estimators (standard rate, no concessions)
+function stampDutyNSW(price) {
+  if (price <= 16000) return price * 0.0125;
+  if (price <= 35000) return 200 + (price - 16000) * 0.015;
+  if (price <= 93000) return 485 + (price - 35000) * 0.0175;
+  if (price <= 351000) return 1500 + (price - 93000) * 0.035;
+  if (price <= 1168000) return 10530 + (price - 351000) * 0.045;
+  return 47295 + (price - 1168000) * 0.055;
+}
+function stampDutyVIC(price) {
+  if (price <= 25000) return price * 0.014;
+  if (price <= 130000) return 350 + (price - 25000) * 0.024;
+  if (price <= 960000) return 2870 + (price - 130000) * 0.06;
+  if (price <= 2000000) return price * 0.055;
+  return 110000 + (price - 2000000) * 0.065;
+}
+function stampDutyQLD(price) {
+  if (price <= 5000) return 0;
+  if (price <= 75000) return (price - 5000) * 0.015;
+  if (price <= 540000) return 1050 + (price - 75000) * 0.035;
+  if (price <= 1000000) return 17325 + (price - 540000) * 0.045;
+  return 38025 + (price - 1000000) * 0.0575;
+}
+
+function dutyFor(price, state, dutyOverride) {
+  if (dutyOverride > 0) return dutyOverride;
+  if (state === "NSW") return stampDutyNSW(price);
+  if (state === "VIC") return stampDutyVIC(price);
+  if (state === "QLD") return stampDutyQLD(price);
+  return 0;
+}
+
+// Finds the purchase price P such that P + duty(P) = targetSum, via binary search
+// (duty is monotonic increasing in price, so this converges cleanly)
+function solveBuyPriceForTotal(targetSum, state, dutyOverride) {
+  if (targetSum <= 0) return 0;
+  let lo = 0, hi = targetSum;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    const sum = mid + dutyFor(mid, state, dutyOverride);
+    if (sum > targetSum) hi = mid; else lo = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function calc() {
+  const mode = document.getElementById('calcMode').value;
+
+  const agentPct = parseFloat(document.getElementById('agentPct').value) || 0;
+  const sellExtra = parseFloat(document.getElementById('sellExtra').value) || 0;
+  const marketingFees = parseFloat(document.getElementById('marketingFees').value) || 0;
+  const sellGovFees = parseFloat(document.getElementById('sellGovFees').value) || 0;
+  const mortgagePayout = parseFloat(document.getElementById('mortgagePayout').value) || 0;
+
+  const state = document.getElementById('state').value;
+  const dutyOverride = parseFloat(document.getElementById('dutyOverride').value) || 0;
+  const buyLegal = parseFloat(document.getElementById('buyLegal').value) || 0;
+  const buffer = parseFloat(document.getElementById('buffer').value) || 0;
+  let targetMortgage = parseFloat(document.getElementById('targetMortgage').value) || 0;
+
+  // Loan terms (used for repayments, and to work back from a desired repayment)
+  const annualRate = parseFloat(document.getElementById('interestRate').value) || 0;
+  const termYears = parseFloat(document.getElementById('loanTerm').value) || 0;
+  const freq = parseInt(document.getElementById('repayFreq').value) || 12;
+  const freqLabel = { 12: "month", 26: "fortnight", 52: "week" }[freq];
+  const periodRate = (annualRate / 100) / freq;
+  const numPeriods = termYears * freq;
+
+  // If the target is set by repayment, work back to the mortgage that repayment supports
+  const targetBasis = document.getElementById('targetBasis').value;
+  if (mode !== "forward" && targetBasis === "repayment") {
+    const desiredRepayment = parseFloat(document.getElementById('desiredRepayment').value) || 0;
+    if (desiredRepayment > 0 && numPeriods > 0) {
+      targetMortgage = periodRate === 0
+        ? desiredRepayment * numPeriods
+        : desiredRepayment * (1 - Math.pow(1 + periodRate, -numPeriods)) / periodRate;
+    } else {
+      targetMortgage = 0;
+    }
+    document.getElementById('targetMortgage').value = Math.round(targetMortgage);
+  }
+
+  let salePrice = parseFloat(document.getElementById('salePrice').value) || 0;
+  let buyPrice = parseFloat(document.getElementById('buyPrice').value) || 0;
+  let newMortgage, duty;
+
+  if (mode === "solveSale") {
+    // Fixed: buyPrice, targetMortgage, buffer. Solve: salePrice.
+    duty = dutyFor(buyPrice, state, dutyOverride);
+    const totalCost = buyPrice + duty + buyLegal + buffer;
+    const requiredNetEquity = totalCost - targetMortgage;
+    const factor = 1 - (agentPct / 100);
+    salePrice = factor > 0 ? (requiredNetEquity + sellExtra + marketingFees + sellGovFees + mortgagePayout) / factor : 0;
+    salePrice = Math.max(salePrice, 0);
+    document.getElementById('salePrice').value = Math.round(salePrice);
+    newMortgage = targetMortgage;
+  } else if (mode === "solveBuy") {
+    // Fixed: salePrice, targetMortgage, buffer. Solve: buyPrice.
+    const agentFee = salePrice * (agentPct / 100);
+    const netEquity = salePrice - agentFee - sellExtra - marketingFees - sellGovFees - mortgagePayout;
+    const totalFunds = netEquity + targetMortgage;
+    const targetSum = totalFunds - buyLegal - buffer;
+    buyPrice = solveBuyPriceForTotal(targetSum, state, dutyOverride);
+    duty = dutyFor(buyPrice, state, dutyOverride);
+    document.getElementById('buyPrice').value = Math.round(buyPrice);
+    newMortgage = targetMortgage;
+  } else {
+    // Forward mode: fixed salePrice & buyPrice, solve newMortgage.
+    duty = dutyFor(buyPrice, state, dutyOverride);
+  }
+
+  const agentFee = salePrice * (agentPct / 100);
+  const netEquity = salePrice - agentFee - sellExtra - marketingFees - sellGovFees - mortgagePayout;
+  const totalCost = buyPrice + duty + buyLegal + buffer;
+  if (mode === "forward") newMortgage = totalCost - netEquity;
+
+  document.getElementById('r_salePrice').textContent = fmt(salePrice);
+  document.getElementById('r_agent').textContent = "-" + fmt(agentFee);
+  document.getElementById('r_marketing').textContent = "-" + fmt(marketingFees);
+  document.getElementById('r_sellExtra').textContent = "-" + fmt(sellExtra);
+  document.getElementById('r_sellGovFees').textContent = "-" + fmt(sellGovFees);
+  document.getElementById('r_payout').textContent = "-" + fmt(mortgagePayout);
+  document.getElementById('r_equity').textContent = fmt(netEquity);
+
+  document.getElementById('r_buyPrice').textContent = fmt(buyPrice);
+  document.getElementById('r_duty').textContent = fmt(duty) + (dutyOverride > 0 ? " (manual)" : (state === "OTHER" ? " (enter manually)" : ""));
+  document.getElementById('r_buyLegal').textContent = fmt(buyLegal);
+  document.getElementById('r_buffer').textContent = fmt(buffer);
+  document.getElementById('r_totalCost').textContent = fmt(totalCost);
+
+  const loanAmount = Math.max(newMortgage, 0);
+
+  // Labels change depending on mode
+  const headlineLabel = document.getElementById('headlineLabel');
+  const finalLabel = document.getElementById('r_finalLabel');
+  if (mode === "solveSale") {
+    headlineLabel.textContent = "Sale price you need";
+    finalLabel.textContent = "New mortgage (target, fixed)";
+    document.getElementById('r_final').textContent = fmt(targetMortgage);
+    document.getElementById('headlineValue').textContent = fmt(salePrice);
+  } else if (mode === "solveBuy") {
+    headlineLabel.textContent = "Purchase budget you can afford";
+    finalLabel.textContent = "New mortgage (target, fixed)";
+    document.getElementById('r_final').textContent = fmt(targetMortgage);
+    document.getElementById('headlineValue').textContent = fmt(buyPrice);
+  } else {
+    headlineLabel.textContent = "Estimated new mortgage";
+    finalLabel.textContent = "New mortgage required";
+    document.getElementById('r_final').textContent = fmt(loanAmount);
+    document.getElementById('headlineValue').textContent = fmt(loanAmount);
+  }
+
+  // Repayment calculation (principal & interest, standard amortisation)
+  const repayAmount = (mode === "forward") ? loanAmount : Math.max(targetMortgage, 0);
+  let repayment = 0;
+  if (repayAmount > 0 && numPeriods > 0) {
+    if (periodRate === 0) {
+      repayment = repayAmount / numPeriods;
+    } else {
+      repayment = repayAmount * (periodRate * Math.pow(1 + periodRate, numPeriods)) / (Math.pow(1 + periodRate, numPeriods) - 1);
+    }
+  }
+  const totalRepaid = repayment * numPeriods;
+  const totalInterest = totalRepaid - repayAmount;
+
+  document.getElementById('r_repayment').textContent = fmt(repayment) + " / " + freqLabel;
+  document.getElementById('r_totalRepaid').textContent = fmt(totalRepaid);
+  document.getElementById('r_totalInterest').textContent = fmt(totalInterest);
+  document.getElementById('repayHint').textContent = repayAmount > 0
+    ? "Based on a " + termYears + "-year principal and interest loan at " + annualRate + "% p.a., repaid " + freqLabel + "ly."
+    : "No mortgage required on these figures, so there's nothing to repay.";
+
+  const warningNote = document.getElementById('warningNote');
+  if (mode === "forward" && newMortgage < 0) {
+    warningNote.style.display = 'block';
+    warningNote.textContent = "On these figures you'd have surplus funds of " + fmt(Math.abs(newMortgage)) + " left over after the purchase, rather than needing a mortgage.";
+    document.getElementById('headlineRange').textContent = "Surplus of " + fmt(Math.abs(newMortgage)) + " on top of the buffer";
+  } else {
+    warningNote.style.display = 'none';
+    document.getElementById('headlineRange').textContent = mode === "forward" ? "Based on the figures entered above" : "Sale/purchase price to hit your target mortgage & buffer";
+  }
+
+  if (state === "OTHER" && dutyOverride === 0) {
+    warningNote.style.display = 'block';
+    warningNote.textContent = "No stamp duty estimate is available for the selected state — enter a manual figure above for an accurate result.";
+  }
+}
+
+function applyModeUI() {
+  const mode = document.getElementById('calcMode').value;
+  document.getElementById('targetMortgageWrap').style.display = (mode === "forward") ? 'none' : 'block';
+
+  const byRepayment = document.getElementById('targetBasis').value === "repayment";
+  document.getElementById('repaymentTargetWrap').style.display = byRepayment ? 'block' : 'none';
+  document.getElementById('targetMortgage').readOnly = byRepayment;
+  document.getElementById('targetMortgageHint').style.display = byRepayment ? 'block' : 'none';
+  document.getElementById('targetMortgageLabel').textContent = byRepayment
+    ? "Mortgage this repayment supports (calculated)" : "Target new mortgage ($)";
+  const freqText = { 12: "month", 26: "fortnight", 52: "week" }[parseInt(document.getElementById('repayFreq').value) || 12];
+  document.getElementById('desiredRepaymentLabel').textContent = "Desired repayment per " + freqText + " ($)";
+
+  const salePriceInput = document.getElementById('salePrice');
+  const buyPriceInput = document.getElementById('buyPrice');
+  salePriceInput.readOnly = (mode === "solveSale");
+  buyPriceInput.readOnly = (mode === "solveBuy");
+
+  document.getElementById('salePriceLabel').textContent = (mode === "solveSale")
+    ? "Sale price needed (calculated)" : "Expected sale price ($)";
+  document.getElementById('buyPriceLabel').textContent = (mode === "solveBuy")
+    ? "Purchase budget (calculated)" : "Expected purchase price ($)";
+
+  calc();
+}
+
+document.getElementById('calcMode').addEventListener('change', applyModeUI);
+document.getElementById('targetBasis').addEventListener('change', applyModeUI);
+document.getElementById('repayFreq').addEventListener('change', applyModeUI);
+
+document.querySelectorAll('input, select').forEach(el => {
+  el.addEventListener('input', calc);
+  el.addEventListener('change', calc);
+});
+
+// Keep the mortgage payout number field and slider in sync
+const mortgageNum = document.getElementById('mortgagePayout');
+const mortgageSlider = document.getElementById('mortgagePayoutSlider');
+mortgageNum.addEventListener('input', () => { mortgageSlider.value = mortgageNum.value; });
+mortgageSlider.addEventListener('input', () => { mortgageNum.value = mortgageSlider.value; calc(); });
+
+// Keep the buffer number field and slider in sync
+const bufferNum = document.getElementById('buffer');
+const bufferSlider = document.getElementById('bufferSlider');
+bufferNum.addEventListener('input', () => { bufferSlider.value = bufferNum.value; });
+bufferSlider.addEventListener('input', () => { bufferNum.value = bufferSlider.value; calc(); });
+
+applyModeUI();
+</script>
+</body>
+</html>
